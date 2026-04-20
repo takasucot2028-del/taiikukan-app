@@ -50,35 +50,64 @@ function doPost(e) {
 }
 
 // ==========================================
+// 設定シートの行範囲（既存Excelの構造に合わせて調整）
+// ==========================================
+var CONFIG_ROWS = {
+  clubs:        { start: 80, end: 89 },   // クラブ名：A列のみ
+  holidays:     { start: 93, end: 112 },  // 祝日：A列=日付、B列=名称
+  schoolEvents: { start: 115, end: 150 }, // 学校行事：A列=日付、B列=名称
+  adminPinRow:  160,                       // A160="管理者PIN"、A161=PIN値
+};
+
+// ==========================================
 // getConfig: クラブ一覧・設定データ取得
 // ==========================================
 function getConfig() {
   var sheet = SS.getSheetByName('設定');
   if (!sheet) return { clubs: [], holidays: [], schoolEvents: [], adminPin: '1234' };
 
-  var data = sheet.getDataRange().getValues();
+  var lastRow = sheet.getLastRow();
+  var data = sheet.getRange(1, 1, lastRow, 5).getValues(); // A〜E列を取得
+
   var clubs = [];
   var holidays = [];
   var schoolEvents = [];
   var adminPin = '1234';
 
-  var section = '';
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    if (!row[0]) continue;
+  // クラブ一覧（A列のみ、空白行はスキップ）
+  for (var r = CONFIG_ROWS.clubs.start; r <= Math.min(CONFIG_ROWS.clubs.end, lastRow); r++) {
+    var clubName = String(data[r - 1][0]).trim();
+    if (clubName) {
+      clubs.push({ id: String(r), name: clubName });
+    }
+  }
 
-    var key = String(row[0]).trim();
-    if (key === 'クラブ一覧') { section = 'clubs'; continue; }
-    if (key === '祝日') { section = 'holidays'; continue; }
-    if (key === '学校行事') { section = 'schoolEvents'; continue; }
-    if (key === '管理者PIN') { adminPin = String(row[1]); continue; }
+  // 祝日リスト（A列=日付、B列=名称）
+  for (var r = CONFIG_ROWS.holidays.start; r <= Math.min(CONFIG_ROWS.holidays.end, lastRow); r++) {
+    var dateVal = data[r - 1][0];
+    var nameVal = String(data[r - 1][1]).trim();
+    if (dateVal && nameVal) {
+      holidays.push({ date: formatDate_(dateVal), name: nameVal });
+    }
+  }
 
-    if (section === 'clubs' && row[0]) {
-      clubs.push({ id: String(i), name: String(row[0]) });
-    } else if (section === 'holidays' && row[0] && row[1]) {
-      holidays.push({ date: formatDate_(row[0]), name: String(row[1]) });
-    } else if (section === 'schoolEvents' && row[0] && row[1]) {
-      schoolEvents.push({ date: formatDate_(row[0]), name: String(row[1]) });
+  // 学校行事リスト（A列=日付、B列=名称）
+  for (var r = CONFIG_ROWS.schoolEvents.start; r <= Math.min(CONFIG_ROWS.schoolEvents.end, lastRow); r++) {
+    var dateVal = data[r - 1][0];
+    var nameVal = String(data[r - 1][1]).trim();
+    if (dateVal && nameVal) {
+      schoolEvents.push({ date: formatDate_(dateVal), name: nameVal });
+    }
+  }
+
+  // 管理者PIN（A160="管理者PIN"、A161=PIN値）
+  // A160のラベルを確認してから読み取る
+  var pinLabelRow = CONFIG_ROWS.adminPinRow - 1; // 0-indexed
+  if (lastRow >= CONFIG_ROWS.adminPinRow + 1) {
+    var label = String(data[pinLabelRow][0]).trim();
+    var pinValue = String(data[pinLabelRow + 1][0]).trim();
+    if (label === '管理者PIN' && pinValue) {
+      adminPin = pinValue;
     }
   }
 
