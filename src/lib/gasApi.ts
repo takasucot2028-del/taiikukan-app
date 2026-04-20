@@ -1,25 +1,51 @@
 import type { AppConfig, Reservation } from '../types'
 
-// スプレッドシートIDとGAS URLは環境変数または定数で管理
 const GAS_URL = import.meta.env.VITE_GAS_URL ?? 'YOUR_GAS_WEBAPP_URL'
 
 async function gasGet<T>(action: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(GAS_URL)
   url.searchParams.set('action', action)
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-  const res = await fetch(url.toString())
-  if (!res.ok) throw new Error(`GAS error: ${res.status}`)
-  return res.json() as Promise<T>
+
+  const res = await fetch(url.toString(), {
+    method: 'GET',
+    redirect: 'follow',
+  })
+
+  const text = await res.text()
+
+  // GASがHTMLエラーページを返した場合
+  if (text.trimStart().startsWith('<')) {
+    throw new Error(`GASがHTMLを返しました（デプロイ設定を確認してください）`)
+  }
+
+  try {
+    const json = JSON.parse(text) as T
+    return json
+  } catch {
+    throw new Error(`JSONパースエラー: ${text.slice(0, 200)}`)
+  }
 }
 
 async function gasPost<T>(action: string, body: Record<string, unknown>): Promise<T> {
   const res = await fetch(GAS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' }, // GASはapplication/jsonでpreflight発生するためtext/plainを使用
     body: JSON.stringify({ action, ...body }),
   })
-  if (!res.ok) throw new Error(`GAS error: ${res.status}`)
-  return res.json() as Promise<T>
+
+  const text = await res.text()
+
+  if (text.trimStart().startsWith('<')) {
+    throw new Error(`GASがHTMLを返しました（デプロイ設定を確認してください）`)
+  }
+
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(`JSONパースエラー: ${text.slice(0, 200)}`)
+  }
 }
 
 export const gasApi = {
