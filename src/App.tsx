@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store'
 import { ClubSelect } from './pages/ClubSelect'
 import { Home } from './pages/Home'
@@ -22,7 +22,7 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter basename="/taiikukan-app">
+    <HashRouter>
       <Routes>
         <Route path="/club-select" element={<ClubSelect />} />
         <Route path="/" element={<RequireClub><Home /></RequireClub>} />
@@ -35,6 +35,6 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
