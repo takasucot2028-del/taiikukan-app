@@ -3,18 +3,19 @@ import { format, parseISO } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Modal } from '../common/Modal'
 import { ReservationForm } from '../Reservation/ReservationForm'
-import type { Reservation, TimeSlot } from '../../types'
+import type { Reservation, SlotEntry } from '../../types'
 
-const TIME_SLOTS: TimeSlot[] = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00', '16:00〜18:00']
+const TIME_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00', '16:00〜18:00']
 
 interface Props {
   date: string
   reservations: Reservation[]
+  schedule: SlotEntry[]
   onClose: () => void
   onReservationAdded: () => void
 }
 
-export function DayDetailModal({ date, reservations, onClose, onReservationAdded }: Props) {
+export function DayDetailModal({ date, reservations, schedule, onClose, onReservationAdded }: Props) {
   const [showForm, setShowForm] = useState(false)
   const dateLabel = format(parseISO(date), 'M月d日（EEE）', { locale: ja })
 
@@ -37,23 +38,33 @@ export function DayDetailModal({ date, reservations, onClose, onReservationAdded
           const slotReservations = reservations.filter(
             (r) => r.timeSlot === slot || r.timeSlot === '終日'
           )
+          const slotSchedule = schedule.filter((s) => s.timeSlot === slot)
+
           return (
             <div key={slot} className="border rounded-lg p-3">
               <p className="text-sm font-semibold text-gray-600 mb-2">{slot}</p>
-              {slotReservations.length === 0 ? (
-                <p className="text-sm text-gray-400">予約なし</p>
-              ) : (
-                slotReservations.map((r) => (
-                  <div key={r.id} className={`text-sm px-2 py-1 rounded mb-1 ${
-                    r.status === '確定' ? 'bg-blue-100 text-blue-800' :
-                    r.status === '却下' ? 'bg-gray-100 text-gray-400 line-through' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {r.content.includes('大会') || r.content.includes('占有') ? '【大会占有】' : ''}
-                    {r.clubName}：{r.facility}
-                    <span className="ml-2 text-xs opacity-70">{r.status}</span>
-                  </div>
-                ))
+
+              {/* ローテーション・固定スケジュール */}
+              {slotSchedule.map((s, i) => (
+                <div key={i} className="text-sm bg-gray-50 text-gray-700 px-2 py-1 rounded mb-1">
+                  {s.facility}：{s.clubName}
+                </div>
+              ))}
+
+              {/* 占有予約申請 */}
+              {slotReservations.map((r) => (
+                <div key={r.id} className={`text-sm px-2 py-1 rounded mb-1 font-medium ${
+                  r.status === '確定'  ? 'bg-blue-100 text-blue-800' :
+                  r.status === '却下'  ? 'bg-gray-100 text-gray-400 line-through' :
+                                         'bg-yellow-100 text-yellow-800'
+                }`}>
+                  【占有】{r.clubName}：{r.facility}
+                  <span className="ml-2 text-xs opacity-70">{r.status}</span>
+                </div>
+              ))}
+
+              {slotSchedule.length === 0 && slotReservations.length === 0 && (
+                <p className="text-sm text-gray-400">予定なし</p>
               )}
             </div>
           )

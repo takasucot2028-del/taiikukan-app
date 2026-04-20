@@ -44,16 +44,47 @@ export interface SchoolEvent {
   name: string
 }
 
+// 時間帯ごとの施設使用（1コマ）
+export interface SlotEntry {
+  timeSlot: string
+  facility: string
+  clubName: string
+}
+
+// 1日のスケジュールパターン（複数コマ）
+export type DayPattern = SlotEntry[]
+
+// 平日固定スケジュール（曜日 → コマ一覧）
+export interface WeekdaySchedule {
+  monday: DayPattern
+  tuesday: DayPattern
+  wednesday: DayPattern
+  thursday: DayPattern
+  friday: DayPattern
+}
+
+// ローテーション（複数パターン）
+export interface Rotation {
+  patterns: DayPattern[]  // パターン1, 2, 3...
+  startIndex: number      // 今月の開始パターン番号（0-indexed）
+}
+
 export interface AppConfig {
   clubs: Club[]
   holidays: Holiday[]
   schoolEvents: SchoolEvent[]
   adminPin: string
+  weekdaySchedule: WeekdaySchedule | null
+  saturdayRotation: Rotation | null
+  sundayRotation: Rotation | null
 }
+
+export type DayType = 'weekday' | 'saturday' | 'sunday' | 'holiday' | 'schoolEvent' | 'longBreak'
 
 export interface DayInfo {
   date: string   // YYYY-MM-DD
-  dayType: 'weekday' | 'saturday' | 'sunday' | 'holiday' | 'schoolEvent' | 'longBreak'
+  dayType: DayType
   eventName?: string
   reservations: Reservation[]
+  schedule: SlotEntry[]
 }

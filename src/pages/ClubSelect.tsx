@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { useConfig } from '../hooks/useReservations'
@@ -6,9 +7,15 @@ import { useConfig } from '../hooks/useReservations'
 const GAS_URL = import.meta.env.VITE_GAS_URL as string | undefined
 
 export function ClubSelect() {
+  const navigate = useNavigate()
   const { setSelectedClub } = useAppStore()
   const { config, error, loading } = useConfig()
   const [search, setSearch] = useState('')
+
+  const handleSelect = (clubName: string) => {
+    setSelectedClub(clubName)
+    navigate('/')
+  }
 
   if (loading) return <LoadingSpinner />
 
@@ -22,14 +29,6 @@ export function ClubSelect() {
             GAS WebアプリURL:<br />
             <code className="break-all bg-gray-100 px-1 rounded text-xs">{GAS_URL ?? '未設定'}</code>
           </p>
-          <details className="text-xs text-gray-500">
-            <summary className="cursor-pointer font-medium mb-1">確認手順</summary>
-            <ol className="list-decimal list-inside space-y-1 mt-1">
-              <li>GASエディタで最新のCode.gsを貼り付けて「新しいバージョン」で再デプロイ</li>
-              <li>アクセス権限が「全員（匿名含む）」になっているか確認</li>
-              <li>ブラウザで直接GAS URLに <code>?action=getConfig</code> を付けてアクセスし、JSONが返るか確認</li>
-            </ol>
-          </details>
           <button
             onClick={() => window.location.reload()}
             className="mt-4 w-full bg-blue-600 text-white rounded-lg py-2 text-sm"
@@ -43,9 +42,7 @@ export function ClubSelect() {
 
   if (!config) return <LoadingSpinner />
 
-  const filtered = config.clubs.filter((c) =>
-    c.name.includes(search)
-  )
+  const filtered = config.clubs.filter((c) => c.name.includes(search))
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -71,8 +68,8 @@ export function ClubSelect() {
           {filtered.map((club) => (
             <button
               key={club.id}
-              onClick={() => setSelectedClub(club.name)}
-              className="w-full text-left px-4 py-3 bg-white border rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-colors font-medium text-gray-800"
+              onClick={() => handleSelect(club.name)}
+              className="w-full text-left px-4 py-4 min-h-[52px] bg-white border rounded-lg active:bg-blue-100 hover:bg-blue-50 hover:border-blue-400 transition-colors font-medium text-gray-800 text-base"
             >
               {club.name}
             </button>

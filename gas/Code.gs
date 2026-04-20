@@ -111,7 +111,58 @@ function getConfig() {
     }
   }
 
-  return { clubs: clubs, holidays: holidays, schoolEvents: schoolEvents, adminPin: adminPin };
+  // スケジュールデータを読み取る（行番号は debugScanScheduleRows() で確認して設定）
+  var scheduleData = readScheduleData_(data, lastRow);
+
+  return {
+    clubs: clubs,
+    holidays: holidays,
+    schoolEvents: schoolEvents,
+    adminPin: adminPin,
+    weekdaySchedule: scheduleData.weekdaySchedule,
+    saturdayRotation: scheduleData.saturdayRotation,
+    sundayRotation: scheduleData.sundayRotation,
+  };
+}
+
+// ==========================================
+// スケジュールデータ読み取り（設定シート上部）
+// ==========================================
+// ★ 以下の行番号は debugScanScheduleRows() を実行して確認・調整してください
+var SCHEDULE_ROWS = {
+  weekdayStart:    -1,  // 平日固定スケジュールの開始行（-1=未設定）
+  saturdayStart:   -1,  // 土曜ローテーションの開始行
+  sundayStart:     -1,  // 日曜ローテーションの開始行
+};
+
+function readScheduleData_(data, lastRow) {
+  // 行番号が設定されていない場合はnullを返す
+  if (SCHEDULE_ROWS.weekdayStart < 0) {
+    return { weekdaySchedule: null, saturdayRotation: null, sundayRotation: null };
+  }
+  // TODO: 実際の行番号が判明したら実装を追加する
+  return { weekdaySchedule: null, saturdayRotation: null, sundayRotation: null };
+}
+
+// ==========================================
+// デバッグ：設定シートの行スキャン（GASエディタから実行）
+// ==========================================
+function debugScanScheduleRows() {
+  var sheet = SS.getSheetByName('設定');
+  if (!sheet) { Logger.log('設定シートが見つかりません'); return; }
+  var lastRow = sheet.getLastRow();
+  var data = sheet.getRange(1, 1, Math.min(77, lastRow), 6).getValues();
+  Logger.log('=== 設定シート 1〜77行目 ===');
+  for (var i = 0; i < data.length; i++) {
+    var row = data[i];
+    var nonEmpty = row.filter(function(c) { return c !== '' && c !== null; });
+    if (nonEmpty.length > 0) {
+      Logger.log((i + 1) + ': ' + row.slice(0, 6).map(function(c) {
+        if (c instanceof Date) return Utilities.formatDate(c, 'Asia/Tokyo', 'MM/dd');
+        return String(c);
+      }).join(' | '));
+    }
+  }
 }
 
 // ==========================================
