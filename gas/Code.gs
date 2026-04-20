@@ -53,10 +53,10 @@ function doPost(e) {
 // 設定シートの行範囲（既存Excelの構造に合わせて調整）
 // ==========================================
 var CONFIG_ROWS = {
-  clubs:        { start: 80, end: 89 },   // クラブ名：A列のみ
-  holidays:     { start: 93, end: 112 },  // 祝日：A列=日付、B列=名称
-  schoolEvents: { start: 115, end: 150 }, // 学校行事：A列=日付、B列=名称
-  adminPinRow:  160,                       // A160="管理者PIN"、A161=PIN値
+  clubs:        { start: 80, end: 89 },   // クラブ名：A列のみ（80〜89行）
+  holidays:     { start: 93, end: 110 },  // 祝日：A列=日付、B列=名称（93〜110行）
+  schoolEvents: { start: 115, end: 164 }, // 学校行事：A列=日付、B列=名称（115〜164行）
+  adminPinRow:  166,                       // A166="管理者PIN"、A167=PIN値（160〜164は学校行事で使用中）
 };
 
 // ==========================================
