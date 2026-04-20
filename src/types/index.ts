@@ -65,7 +65,7 @@ export interface WeekdaySchedule {
 export interface Rotation {
   summerPatterns: DayPattern[]  // 5〜10月
   winterPatterns: DayPattern[]  // 11〜4月
-  startIndex: number            // 今月の開始パターン（0-indexed）
+  startIndex: number            // 今月の開始パターン（0-indexed = パターン番号-1）
 }
 
 export interface AppConfig {

@@ -17,7 +17,7 @@ export function Home() {
 
   const handleChangeClub = () => {
     setSelectedClub('')
-    navigate('/club-select')
+    navigate('/club-select', { replace: true })
   }
 
   const filterClub = filterMine ? selectedClub : ''

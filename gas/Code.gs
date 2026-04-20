@@ -124,22 +124,38 @@ function getConfig() {
   var winterSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSaturday.start, 6);
   var winterSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSunday.start,   6);
 
+  // ローテーション開始番号（A列に「土曜開始番号」「日曜開始番号」ラベルがある行を探す）
+  var satStart = 0; // デフォルト：パターン①（0-indexed）
+  var sunStart = 0;
+  for (var r = 1; r <= Math.min(12, lastRow); r++) {
+    var lbl = String(data[r - 1][0]).trim();
+    if (lbl === '土曜開始番号' || lbl === '土曜ローテーション開始') {
+      var v = parseInt(data[r - 1][1]);
+      if (!isNaN(v) && v >= 1) satStart = v - 1; // 1-indexed → 0-indexed
+    }
+    if (lbl === '日曜開始番号' || lbl === '日曜ローテーション開始') {
+      var v = parseInt(data[r - 1][1]);
+      if (!isNaN(v) && v >= 1) sunStart = v - 1;
+    }
+  }
+
   return {
-    clubs:             clubs,
-    holidays:          holidays,
-    schoolEvents:      schoolEvents,
-    adminPin:          adminPin,
-    weekdaySchedule:   weekdaySchedule,
+    clubs:           clubs,
+    holidays:        holidays,
+    schoolEvents:    schoolEvents,
+    adminPin:        adminPin,
+    weekdaySchedule: weekdaySchedule,
     saturdayRotation: {
       summerPatterns: summerSatPats,
       winterPatterns: winterSatPats,
-      startIndex: 0,   // 管理者が月ごとに設定（Phase 2で実装）
+      startIndex: satStart,
     },
     sundayRotation: {
       summerPatterns: summerSunPats,
       winterPatterns: winterSunPats,
-      startIndex: 0,
+      startIndex: sunStart,
     },
+    rotationStartNumbers: { saturday: satStart + 1, sunday: sunStart + 1 },
   };
 }
 

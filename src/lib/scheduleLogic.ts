@@ -85,15 +85,20 @@ export function getDaySchedule(
   const { type } = getDayType(dateStr, config)
   const summer = isSummer(month)
 
-  // ---- 平日・学校行事平日 → 平日固定スケジュール ----
+  // ---- 平日・学校行事平日 → 平日固定スケジュール（16:00〜18:00のみ） ----
   if (type === 'weekday' || type === 'schoolEvent') {
     if (!config.weekdaySchedule) return []
     const dow = getDay(new Date(dateStr + 'T00:00:00'))
-    const keyMap: Record<number, keyof typeof config.weekdaySchedule> = {
+    const keyMap: Record<number, keyof NonNullable<AppConfig['weekdaySchedule']>> = {
       1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday',
     }
     const key = keyMap[dow]
-    return key ? (config.weekdaySchedule[key] ?? []) : []
+    const slots = key ? (config.weekdaySchedule[key] ?? []) : []
+    // 時間帯が空の場合は16:00〜18:00として扱う
+    return slots.map((s) => ({
+      ...s,
+      timeSlot: s.timeSlot || '16:00〜18:00',
+    }))
   }
 
   // ---- 土曜ローテーション ----
@@ -103,7 +108,9 @@ export function getDaySchedule(
       ? config.saturdayRotation.summerPatterns
       : config.saturdayRotation.winterPatterns
     const nth = getNthDayOfWeekInMonth(dateStr, 6)
-    return getRotationPattern(patterns, config.saturdayRotation.startIndex, nth)
+    const result = getRotationPattern(patterns, config.saturdayRotation.startIndex, nth)
+    console.log(`[schedule] 土曜 ${dateStr}: ${nth+1}番目 パターン${((config.saturdayRotation.startIndex + nth) % Math.max(patterns.filter(p=>p.length>0).length, 1)) + 1} → ${result.length}スロット`)
+    return result
   }
 
   // ---- 日曜・祝日・長期休業 → 日曜ローテーション ----
@@ -114,7 +121,9 @@ export function getDaySchedule(
       : config.sundayRotation.winterPatterns
     const nth = getNthSundayTypeInMonth(dateStr, config)
     const slots = getRotationPattern(patterns, config.sundayRotation.startIndex, nth)
-    return applyNexusBcRule(slots)
+    const result = applyNexusBcRule(slots)
+    console.log(`[schedule] 日曜/祝日 ${dateStr}: ${nth+1}番目 → ${result.length}スロット`)
+    return result
   }
 
   return []

@@ -143,6 +143,7 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
           date={selectedDate}
           reservations={reservations.filter((r) => r.date === selectedDate)}
           schedule={config ? getDaySchedule(selectedDate, config, month) : []}
+          config={config}
           onClose={() => setSelectedDate(null)}
           onReservationAdded={onRefresh}
         />

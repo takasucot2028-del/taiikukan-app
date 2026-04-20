@@ -89,7 +89,15 @@ export function AdminReservations() {
 
       <main className="p-3 max-w-2xl mx-auto space-y-3">
         {filtered.length === 0 && (
-          <p className="text-center text-gray-400 py-12">申請がありません</p>
+          <div className="bg-white border rounded-xl p-8 text-center">
+            <p className="text-3xl mb-3">📋</p>
+            <p className="text-gray-600 font-medium">現在申請はありません</p>
+            <p className="text-sm text-gray-400 mt-1">
+              {filterStatus !== 'all' || filterClub !== 'all'
+                ? 'フィルター条件に一致する申請がありません'
+                : `${currentYear}年${currentMonth}月の占有予約申請が届くとここに表示されます`}
+            </p>
+          </div>
         )}
 
         {filtered.map((r) => {

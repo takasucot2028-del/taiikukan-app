@@ -14,7 +14,7 @@ export function ClubSelect() {
 
   const handleSelect = (clubName: string) => {
     setSelectedClub(clubName)
-    navigate('/')
+    navigate('/home')
   }
 
   if (loading) return <LoadingSpinner />
