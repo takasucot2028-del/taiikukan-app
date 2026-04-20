@@ -3,14 +3,13 @@ export type ReservationStatus = '申請中' | '確定' | '却下'
 export interface Club {
   id: string
   name: string
-  color?: string
 }
 
 export interface Reservation {
   id: string
   createdAt: string
   clubName: string
-  date: string        // YYYY-MM-DD
+  date: string
   timeSlot: TimeSlot
   facility: Facility
   content: string
@@ -35,38 +34,38 @@ export type Facility =
   | '全施設'
 
 export interface Holiday {
-  date: string  // YYYY-MM-DD
+  date: string
   name: string
 }
 
 export interface SchoolEvent {
-  date: string  // YYYY-MM-DD
+  date: string
   name: string
 }
 
-// 時間帯ごとの施設使用（1コマ）
+// 施設・時間帯ごとの使用1コマ
 export interface SlotEntry {
   timeSlot: string
   facility: string
   clubName: string
 }
 
-// 1日のスケジュールパターン（複数コマ）
 export type DayPattern = SlotEntry[]
 
-// 平日固定スケジュール（曜日 → コマ一覧）
+// 平日固定スケジュール（曜日別）
 export interface WeekdaySchedule {
-  monday: DayPattern
-  tuesday: DayPattern
+  monday:    DayPattern
+  tuesday:   DayPattern
   wednesday: DayPattern
-  thursday: DayPattern
-  friday: DayPattern
+  thursday:  DayPattern
+  friday:    DayPattern
 }
 
-// ローテーション（複数パターン）
+// ローテーション（夏期・冬期のパターン群）
 export interface Rotation {
-  patterns: DayPattern[]  // パターン1, 2, 3...
-  startIndex: number      // 今月の開始パターン番号（0-indexed）
+  summerPatterns: DayPattern[]  // 5〜10月
+  winterPatterns: DayPattern[]  // 11〜4月
+  startIndex: number            // 今月の開始パターン（0-indexed）
 }
 
 export interface AppConfig {
@@ -74,17 +73,9 @@ export interface AppConfig {
   holidays: Holiday[]
   schoolEvents: SchoolEvent[]
   adminPin: string
-  weekdaySchedule: WeekdaySchedule | null
+  weekdaySchedule:  WeekdaySchedule | null
   saturdayRotation: Rotation | null
-  sundayRotation: Rotation | null
+  sundayRotation:   Rotation | null
 }
 
 export type DayType = 'weekday' | 'saturday' | 'sunday' | 'holiday' | 'schoolEvent' | 'longBreak'
-
-export interface DayInfo {
-  date: string   // YYYY-MM-DD
-  dayType: DayType
-  eventName?: string
-  reservations: Reservation[]
-  schedule: SlotEntry[]
-}
