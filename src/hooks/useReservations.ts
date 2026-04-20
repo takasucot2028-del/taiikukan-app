@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { gasApi } from '../lib/gasApi'
 import { useAppStore } from '../store'
 
@@ -23,11 +23,28 @@ export function useReservations() {
 
 export function useConfig() {
   const { config, setConfig } = useAppStore()
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (config) return
-    gasApi.getConfig().then(setConfig).catch(console.error)
+    setLoading(true)
+    setError(null)
+    gasApi.getConfig()
+      .then((data) => {
+        if (!data || !Array.isArray(data.clubs)) {
+          setError(`GASから不正なデータが返されました: ${JSON.stringify(data)}`)
+          return
+        }
+        setConfig(data)
+      })
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(`GAS接続エラー: ${msg}`)
+        console.error('getConfig error', e)
+      })
+      .finally(() => setLoading(false))
   }, [config, setConfig])
 
-  return config
+  return { config, error, loading }
 }

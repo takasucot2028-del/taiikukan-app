@@ -11,7 +11,7 @@ type Tab = 'calendar' | 'list'
 export function Home() {
   const navigate = useNavigate()
   const { selectedClub, setSelectedClub, currentYear, currentMonth, setCurrentMonth } = useAppStore()
-  const config = useConfig()
+  const { config } = useConfig()
   const { reservations, refetch } = useReservations()
   const [tab, setTab] = useState<Tab>('calendar')
   const [filterMine, setFilterMine] = useState(false)
