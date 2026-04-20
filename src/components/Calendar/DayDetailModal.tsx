@@ -3,10 +3,12 @@ import { format, parseISO, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Modal } from '../common/Modal'
 import { ReservationForm } from '../Reservation/ReservationForm'
+import { ScheduleEntryForm } from '../Reservation/ScheduleEntryForm'
 import type { Reservation, SlotEntry, AppConfig } from '../../types'
 import { getDayType } from '../../lib/scheduleLogic'
+import { gasApi } from '../../lib/gasApi'
+import { useAppStore } from '../../store'
 
-// 時間帯の表示順（この順番でソート）
 const SLOT_ORDER = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00', '16:00〜18:00', '終日']
 
 function sortSlots(slots: string[]): string[] {
@@ -20,9 +22,7 @@ function sortSlots(slots: string[]): string[] {
   })
 }
 
-/** 日タイプに応じた表示時間帯 */
 function getRelevantTimeSlots(dateStr: string, config: AppConfig | null, schedule: SlotEntry[]): string[] {
-  // スケジュールに存在する時間帯を優先
   const fromSchedule = [...new Set(schedule.map((s) => s.timeSlot))]
   if (fromSchedule.length > 0) return sortSlots(fromSchedule)
 
@@ -47,21 +47,60 @@ interface Props {
 }
 
 export function DayDetailModal({ date, reservations, schedule, config, onClose, onReservationAdded }: Props) {
-  const [showForm, setShowForm] = useState(false)
+  const { selectedClub } = useAppStore()
+  const [showReservationForm, setShowReservationForm] = useState(false)
+  const [showScheduleForm, setShowScheduleForm] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<Reservation | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
   const dateLabel = format(parseISO(date), 'M月d日（EEE）', { locale: ja })
 
-  // 表示する時間帯を決定（スケジュール or 予約 or デフォルト）
-  const reservationSlots = reservations.map((r) => r.timeSlot)
-  const allSlots = getRelevantTimeSlots(date, config, schedule)
-  const timeSlots = sortSlots([...new Set([...allSlots, ...reservationSlots])])
+  const dayType = config ? getDayType(date, config).type : null
+  const dow = getDay(new Date(date + 'T00:00:00'))
+  const isNonWeekday = dayType
+    ? (dayType === 'saturday' || dayType === 'sunday' || dayType === 'holiday' || dayType === 'longBreak')
+    : (dow === 0 || dow === 6)
 
-  if (showForm) {
+  const reservationEntries = reservations.filter((r) => r.entryType !== 'schedule')
+  const scheduleEntries = reservations.filter((r) => r.entryType === 'schedule')
+
+  const allSlots = getRelevantTimeSlots(date, config, schedule)
+  const allReservationSlots = reservations.map((r) => r.timeSlot)
+  const timeSlots = sortSlots([...new Set([...allSlots, ...allReservationSlots])])
+
+  const handleDelete = async (entry: Reservation) => {
+    if (!window.confirm(`「${entry.content}」を削除しますか？`)) return
+    setDeleting(entry.id)
+    try {
+      await gasApi.deleteScheduleEntry(entry.id)
+      onReservationAdded()
+    } catch {
+      alert('削除に失敗しました。')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  if (showReservationForm) {
     return (
       <Modal title="占有予約申請" onClose={onClose}>
         <ReservationForm
           initialDate={date}
-          onSuccess={() => { setShowForm(false); onReservationAdded(); onClose() }}
-          onCancel={() => setShowForm(false)}
+          onSuccess={() => { setShowReservationForm(false); onReservationAdded(); onClose() }}
+          onCancel={() => setShowReservationForm(false)}
+        />
+      </Modal>
+    )
+  }
+
+  if (showScheduleForm || editingEntry) {
+    return (
+      <Modal title={editingEntry ? '予定を編集' : '予定を追加'} onClose={onClose}>
+        <ScheduleEntryForm
+          date={date}
+          entry={editingEntry ?? undefined}
+          onSuccess={() => { setShowScheduleForm(false); setEditingEntry(null); onReservationAdded(); onClose() }}
+          onCancel={() => { setShowScheduleForm(false); setEditingEntry(null) }}
         />
       </Modal>
     )
@@ -72,7 +111,10 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
       <div className="space-y-3">
         {timeSlots.map((slot) => {
           const slotSchedule = schedule.filter((s) => s.timeSlot === slot)
-          const slotReservations = reservations.filter(
+          const slotReservationEntries = reservationEntries.filter(
+            (r) => r.timeSlot === slot || r.timeSlot === '終日'
+          )
+          const slotScheduleEntries = scheduleEntries.filter(
             (r) => r.timeSlot === slot || r.timeSlot === '終日'
           )
           return (
@@ -85,7 +127,26 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
                 </div>
               ))}
 
-              {slotReservations.map((r) => (
+              {slotScheduleEntries.map((r) => (
+                <div key={r.id} className="text-sm bg-green-50 text-green-800 px-2 py-1 rounded mb-1 flex items-center justify-between gap-1">
+                  <span className="min-w-0 break-words">{r.facility}：{r.clubName}（{r.content}）</span>
+                  {r.clubName === selectedClub && (
+                    <span className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => setEditingEntry(r)}
+                        className="text-xs bg-green-200 hover:bg-green-300 px-2 py-0.5 rounded"
+                      >編集</button>
+                      <button
+                        onClick={() => handleDelete(r)}
+                        disabled={deleting === r.id}
+                        className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-0.5 rounded disabled:opacity-50"
+                      >{deleting === r.id ? '...' : '削除'}</button>
+                    </span>
+                  )}
+                </div>
+              ))}
+
+              {slotReservationEntries.map((r) => (
                 <div key={r.id} className={`text-sm px-2 py-1 rounded mb-1 font-medium ${
                   r.status === '確定'  ? 'bg-blue-100 text-blue-800' :
                   r.status === '却下'  ? 'bg-gray-100 text-gray-400 line-through' :
@@ -96,15 +157,24 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
                 </div>
               ))}
 
-              {slotSchedule.length === 0 && slotReservations.length === 0 && (
+              {slotSchedule.length === 0 && slotScheduleEntries.length === 0 && slotReservationEntries.length === 0 && (
                 <p className="text-sm text-gray-400">予定なし</p>
               )}
             </div>
           )
         })}
 
+        {isNonWeekday && (
+          <button
+            onClick={() => setShowScheduleForm(true)}
+            className="w-full mt-2 bg-green-600 text-white rounded-lg py-3 font-medium"
+          >
+            ＋ 予定を追加する
+          </button>
+        )}
+
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => setShowReservationForm(true)}
           className="w-full mt-2 bg-blue-600 text-white rounded-lg py-3 font-medium"
         >
           ＋ 占有予約を申請する

@@ -65,6 +65,8 @@ function doPost(e) {
         return createResponse(updateReservation(body));
       case 'updateStatus':
         return createResponse(updateStatus(body));
+      case 'deleteReservation':
+        return createResponse(deleteReservation(body));
       default:
         return createResponse({ error: 'Unknown action: ' + action });
     }
@@ -224,21 +226,24 @@ function getReservations(year, month) {
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     if (!row[0]) continue;
+    var status = String(row[8]);
+    if (status === '削除済み') continue;  // 削除済みは除外
     var date = formatDate_(row[3]);
     var parts = date.split('-');
     if (parseInt(parts[0]) !== y || parseInt(parts[1]) !== m) continue;
     reservations.push({
-      id: String(row[0]),
+      id:        String(row[0]),
       createdAt: formatDateTime_(row[1]),
-      clubName: String(row[2]),
-      date: date,
-      timeSlot: String(row[4]),
-      facility: String(row[5]),
-      content: String(row[6]),
-      comment: String(row[7]),
-      status: String(row[8]),
+      clubName:  String(row[2]),
+      date:      date,
+      timeSlot:  String(row[4]),
+      facility:  String(row[5]),
+      content:   String(row[6]),
+      comment:   String(row[7] || ''),
+      status:    status,
       adminMemo: String(row[9] || ''),
       updatedAt: formatDateTime_(row[10]),
+      entryType: String(row[11] || 'reservation'),  // L列: エントリータイプ
     });
   }
   return reservations;
@@ -251,14 +256,34 @@ function addReservation(body) {
   var sheet = SS.getSheetByName('予約申請');
   if (!sheet) {
     sheet = SS.insertSheet('予約申請');
-    sheet.appendRow(['申請ID','申請日時','クラブ名','対象日','時間帯','占有施設','占有内容','コメント','ステータス','管理者メモ','最終更新日時']);
+    sheet.appendRow(['申請ID','申請日時','クラブ名','対象日','時間帯','占有施設','占有内容','コメント','ステータス','管理者メモ','最終更新日時','エントリータイプ']);
   }
   var id = Utilities.getUuid();
   var now = new Date();
+  var entryType = body.entryType || 'reservation';
+  var status = entryType === 'schedule' ? '確定' : '申請中';
   sheet.appendRow([id, now, body.clubName, new Date(body.date), body.timeSlot,
-    body.facility, body.content, body.comment || '', '申請中', '', now]);
-  writeLog_('addReservation', body.clubName, '予約申請：' + body.date + ' ' + body.content);
+    body.facility, body.content, body.comment || '', status, '', now, entryType]);
+  writeLog_('addReservation', body.clubName, entryType + '追加：' + body.date + ' ' + body.content);
   return { success: true, id: id };
+}
+
+// ==========================================
+// deleteReservation: スケジュールエントリ削除（論理削除）
+// ==========================================
+function deleteReservation(body) {
+  var sheet = SS.getSheetByName('予約申請');
+  if (!sheet) return { success: false, error: 'シートが見つかりません' };
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(body.id)) continue;
+    var row = i + 1;
+    sheet.getRange(row, 9).setValue('削除済み');
+    sheet.getRange(row, 11).setValue(new Date());
+    writeLog_('deleteReservation', String(data[i][2]), '削除：' + body.id);
+    return { success: true };
+  }
+  return { success: false, error: '該当IDが見つかりません' };
 }
 
 // ==========================================
