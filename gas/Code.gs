@@ -2,7 +2,7 @@
 // 体育館予約管理 - GAS API メイン処理
 // ==========================================
 
-var SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID'; // ← スプレッドシートIDを入力
+var SPREADSHEET_ID = '1tUmnLtQGJVNdaQ0mGaQku8KEwuhmDF-z7lU48sSlKjo'; // ← スプレッドシートIDを入力
 var SS = SpreadsheetApp.openById(SPREADSHEET_ID);
 
 // CORS対応レスポンスヘッダー
