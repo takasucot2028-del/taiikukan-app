@@ -1,0 +1,21 @@
+{
+  "name": "体育館予約管理",
+  "short_name": "体育館予約",
+  "description": "鷹栖中学校 体育館月間使用計画 予約管理アプリ",
+  "start_url": "/taiikukan-app/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "/taiikukan-app/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/taiikukan-app/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
