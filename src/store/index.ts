@@ -40,7 +40,7 @@ export const useAppStore = create<AppState>()(
       setAdminAuthenticated: (v) => set({ isAdminAuthenticated: v }),
     }),
     {
-      name: 'taiikukan-app',
+      name: 'taiikukan-app-storage',
       partialize: (state) => ({
         selectedClub: state.selectedClub,
       }),

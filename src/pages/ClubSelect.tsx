@@ -12,6 +12,9 @@ export function ClubSelect() {
   const { config, error, loading } = useConfig()
   const [search, setSearch] = useState('')
 
+  // デバッグ：localStorageの中身を確認
+  console.log('[ClubSelect] localStorage:', localStorage.getItem('taiikukan-app-storage'))
+
   const handleSelect = (clubName: string) => {
     setSelectedClub(clubName)
     navigate('/home')

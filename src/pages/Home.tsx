@@ -16,7 +16,18 @@ export function Home() {
   const [filterMine, setFilterMine] = useState(false)
 
   const handleChangeClub = () => {
+    // Zustand状態クリア + localStorage両方クリアして確実にリセット
     setSelectedClub('')
+    try {
+      const raw = localStorage.getItem('taiikukan-app-storage')
+      if (raw) {
+        const parsed = JSON.parse(raw) as { state?: { selectedClub?: string } }
+        if (parsed.state) {
+          parsed.state.selectedClub = ''
+          localStorage.setItem('taiikukan-app-storage', JSON.stringify(parsed))
+        }
+      }
+    } catch { /* ignore */ }
     navigate('/club-select', { replace: true })
   }
 

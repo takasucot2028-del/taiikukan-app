@@ -6,14 +6,27 @@ import { ReservationForm } from '../Reservation/ReservationForm'
 import type { Reservation, SlotEntry, AppConfig } from '../../types'
 import { getDayType } from '../../lib/scheduleLogic'
 
+// 時間帯の表示順（この順番でソート）
+const SLOT_ORDER = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00', '16:00〜18:00', '終日']
+
+function sortSlots(slots: string[]): string[] {
+  return [...slots].sort((a, b) => {
+    const ia = SLOT_ORDER.indexOf(a)
+    const ib = SLOT_ORDER.indexOf(b)
+    if (ia === -1 && ib === -1) return a.localeCompare(b)
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+}
+
 /** 日タイプに応じた表示時間帯 */
 function getRelevantTimeSlots(dateStr: string, config: AppConfig | null, schedule: SlotEntry[]): string[] {
   // スケジュールに存在する時間帯を優先
   const fromSchedule = [...new Set(schedule.map((s) => s.timeSlot))]
-  if (fromSchedule.length > 0) return fromSchedule
+  if (fromSchedule.length > 0) return sortSlots(fromSchedule)
 
   if (!config) {
-    // config未取得時は曜日から判定
     const dow = getDay(new Date(dateStr + 'T00:00:00'))
     if (dow === 0 || dow === 6) return ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
     return ['16:00〜18:00']
@@ -40,8 +53,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
   // 表示する時間帯を決定（スケジュール or 予約 or デフォルト）
   const reservationSlots = reservations.map((r) => r.timeSlot)
   const allSlots = getRelevantTimeSlots(date, config, schedule)
-  const timeSlots = [...new Set([...allSlots, ...reservationSlots])]
-    .sort((a, b) => a.localeCompare(b))
+  const timeSlots = sortSlots([...new Set([...allSlots, ...reservationSlots])])
 
   if (showForm) {
     return (
