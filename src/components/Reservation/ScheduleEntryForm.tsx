@@ -3,21 +3,24 @@ import { gasApi } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
 import type { Reservation } from '../../types'
 
-const TIME_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
-
+const DEFAULT_TIME_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
 const FACILITIES = ['第1体育館', '第2体育館', '総合体育館', '第1・第2体育館', '全施設']
 
 interface Props {
   date: string
   entry?: Reservation
+  availableTimeSlots?: string[]
+  lockedSlot?: { timeSlot: string; facility: string }
   onSuccess: () => void
   onCancel: () => void
 }
 
-export function ScheduleEntryForm({ date, entry, onSuccess, onCancel }: Props) {
+export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot, onSuccess, onCancel }: Props) {
   const { selectedClub } = useAppStore()
-  const [timeSlot, setTimeSlot] = useState(entry?.timeSlot ?? '8:00〜11:00')
-  const [facility, setFacility] = useState(entry?.facility ?? '第1体育館')
+  const slots = availableTimeSlots ?? DEFAULT_TIME_SLOTS
+
+  const [timeSlot, setTimeSlot] = useState(lockedSlot?.timeSlot ?? entry?.timeSlot ?? slots[0])
+  const [facility, setFacility] = useState(lockedSlot?.facility ?? entry?.facility ?? FACILITIES[0])
   const [content, setContent] = useState(entry?.content ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -50,24 +53,32 @@ export function ScheduleEntryForm({ date, entry, onSuccess, onCancel }: Props) {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">時間帯</label>
-        <select
-          value={timeSlot}
-          onChange={(e) => setTimeSlot(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-        >
-          {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+        {lockedSlot ? (
+          <input value={timeSlot} disabled className="w-full border rounded-lg px-3 py-2 bg-gray-100 text-gray-600" />
+        ) : (
+          <select
+            value={timeSlot}
+            onChange={(e) => setTimeSlot(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            {slots.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">使用施設</label>
-        <select
-          value={facility}
-          onChange={(e) => setFacility(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-        >
-          {FACILITIES.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
+        {lockedSlot ? (
+          <input value={facility} disabled className="w-full border rounded-lg px-3 py-2 bg-gray-100 text-gray-600" />
+        ) : (
+          <select
+            value={facility}
+            onChange={(e) => setFacility(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            {FACILITIES.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+        )}
       </div>
 
       <div>

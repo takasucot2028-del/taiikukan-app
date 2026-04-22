@@ -1,5 +1,5 @@
 import { getDay } from 'date-fns'
-import type { AppConfig, SlotEntry, DayType, DayPattern } from '../types'
+import type { AppConfig, SlotEntry, DayType, DayPattern, Reservation } from '../types'
 
 /** 夏期（5〜10月）か冬期（11〜4月）かを返す */
 function isSummer(month: number): boolean {
@@ -129,16 +129,36 @@ export function getDaySchedule(
   return []
 }
 
-/** カレンダーセル用：日付のスケジュール概要（クラブ名リスト） */
+/** カレンダーセル用：日付のスケジュール概要（deleted_slot・schedule優先適用済み） */
 export function getDayClubSummary(
   dateStr: string,
   config: AppConfig,
   month: number,
   filterClub: string,
+  reservations?: Reservation[],
 ): string[] {
-  const slots = getDaySchedule(dateStr, config, month)
-  const filtered = filterClub ? slots.filter((s) => s.clubName === filterClub) : slots
-  // 重複クラブ名を除去
-  const names = [...new Set(filtered.map((s) => s.clubName))]
-  return names
+  const baseSlots = getDaySchedule(dateStr, config, month)
+  let effective: SlotEntry[] = [...baseSlots]
+
+  if (reservations && reservations.length > 0) {
+    const dayRes = reservations.filter((r) => r.date === dateStr)
+    const deletedSlots = dayRes.filter((r) => r.entryType === 'deleted_slot')
+    const userSchedule = dayRes.filter((r) => r.entryType === 'schedule')
+
+    // Priority 1: remove slots overridden by user schedule
+    effective = effective.filter(
+      (s) => !userSchedule.some((r) => r.timeSlot === s.timeSlot && r.facility === s.facility)
+    )
+    // Priority 2: remove deleted slots
+    effective = effective.filter(
+      (s) => !deletedSlots.some((d) => d.timeSlot === s.timeSlot && d.facility === s.facility)
+    )
+    // Add user-added schedule entries
+    userSchedule.forEach((r) => {
+      effective.push({ timeSlot: r.timeSlot, facility: r.facility, clubName: r.clubName })
+    })
+  }
+
+  const filtered = filterClub ? effective.filter((s) => s.clubName === filterClub) : effective
+  return [...new Set(filtered.map((s) => s.clubName))]
 }

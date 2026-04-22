@@ -79,14 +79,15 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
             }
           }
 
-          // スケジュールクラブ名一覧
+          // スケジュールクラブ名一覧（deleted_slot・schedule優先適用）
+          const dayReservations = reservations.filter((r) => r.date === dateStr)
           const clubNames = config
-            ? getDayClubSummary(dateStr, config, month, filterClub)
+            ? getDayClubSummary(dateStr, config, month, filterClub, dayReservations)
             : []
 
           // 予約バッジ
-          const dayRes = reservations.filter(
-            (r) => r.date === dateStr && (filterClub === '' || r.clubName === filterClub)
+          const dayRes = dayReservations.filter(
+            (r) => filterClub === '' || r.clubName === filterClub
           )
           const confirmedCount = dayRes.filter((r) => r.status === '確定').length
           const pendingCount   = dayRes.filter((r) => r.status === '申請中').length

@@ -11,12 +11,13 @@ export interface Reservation {
   clubName: string
   date: string
   timeSlot: TimeSlot
-  facility: Facility
+  facility: string       // scheduleエントリは施設名文字列をそのまま使用
   content: string
   comment: string
   status: ReservationStatus
   adminMemo: string
   updatedAt: string
+  entryType: 'reservation' | 'schedule' | 'deleted_slot'
 }
 
 export type TimeSlot =

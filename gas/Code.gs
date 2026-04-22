@@ -261,10 +261,10 @@ function addReservation(body) {
   var id = Utilities.getUuid();
   var now = new Date();
   var entryType = body.entryType || 'reservation';
-  var status = entryType === 'schedule' ? '確定' : '申請中';
+  var status = (entryType === 'schedule' || entryType === 'deleted_slot') ? '確定' : '申請中';
   sheet.appendRow([id, now, body.clubName, new Date(body.date), body.timeSlot,
     body.facility, body.content, body.comment || '', status, '', now, entryType]);
-  writeLog_('addReservation', body.clubName, entryType + '追加：' + body.date + ' ' + body.content);
+  writeLog_('addReservation', body.clubName, entryType + '：' + body.date + ' ' + body.facility);
   return { success: true, id: id };
 }
 
