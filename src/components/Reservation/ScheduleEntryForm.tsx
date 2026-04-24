@@ -4,7 +4,13 @@ import { useAppStore } from '../../store'
 import type { Reservation } from '../../types'
 
 const DEFAULT_TIME_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
-const FACILITIES = ['第1体育館', '第2体育館', '総合体育館', '第1・第2体育館', '全施設']
+
+const FACILITY_GROUPS = [
+  { label: '第1体育館', options: ['第1体育館（全面）', '第1体育館 半面A', '第1体育館 半面B', '第1体育館 ステージ'] },
+  { label: '第2体育館', options: ['第2体育館（全面）'] },
+  { label: '総合体育館', options: ['総合体育館（全面）', '総合体育館 半面A', '総合体育館 半面B'] },
+]
+const ALL_FACILITIES = FACILITY_GROUPS.flatMap((g) => g.options)
 
 interface Props {
   date: string
@@ -20,7 +26,7 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
   const slots = availableTimeSlots ?? DEFAULT_TIME_SLOTS
 
   const [timeSlot, setTimeSlot] = useState(lockedSlot?.timeSlot ?? entry?.timeSlot ?? slots[0])
-  const [facility, setFacility] = useState(lockedSlot?.facility ?? entry?.facility ?? FACILITIES[0])
+  const [facility, setFacility] = useState(lockedSlot?.facility ?? entry?.facility ?? ALL_FACILITIES[0])
   const [content, setContent] = useState(entry?.content ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -76,7 +82,11 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
             onChange={(e) => setFacility(e.target.value)}
             className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
           >
-            {FACILITIES.map((f) => <option key={f} value={f}>{f}</option>)}
+            {FACILITY_GROUPS.map((group) => (
+              <optgroup key={group.label} label={`── ${group.label} ──`}>
+                {group.options.map((f) => <option key={f} value={f}>{f}</option>)}
+              </optgroup>
+            ))}
           </select>
         )}
       </div>

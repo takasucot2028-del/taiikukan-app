@@ -105,7 +105,7 @@ export function Home() {
       </div>
 
       {/* コンテンツ */}
-      <main className="flex-1 p-3 max-w-lg mx-auto w-full">
+      <main className="flex-1 p-3 max-w-lg md:max-w-5xl mx-auto w-full">
         {tab === 'calendar' ? (
           <MonthCalendar
             year={currentYear}

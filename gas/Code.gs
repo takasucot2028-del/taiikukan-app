@@ -7,13 +7,13 @@ var SS = SpreadsheetApp.openById(SPREADSHEET_ID);
 
 // 施設名（列C〜I = インデックス2〜8）
 var FACILITY_NAMES = [
-  '第1体育館 半面A',      // C列 (idx 2)
-  '第1体育館 半面B',      // D列 (idx 3)
-  '第1体育館 全面',       // E列 (idx 4)
-  '第1体育館 ステージ',   // F列 (idx 5)
-  '第2体育館 全面',       // G列 (idx 6)
-  '総合体育館 半面A',     // H列 (idx 7)
-  '総合体育館 半面B/全面', // I列 (idx 8)
+  '第1体育館 半面A',   // C列 (idx 2)
+  '第1体育館 半面B',   // D列 (idx 3)
+  '第1体育館（全面）', // E列 (idx 4)
+  '第1体育館 ステージ', // F列 (idx 5)
+  '第2体育館（全面）', // G列 (idx 6)
+  '総合体育館 半面A',  // H列 (idx 7)
+  '総合体育館 半面B',  // I列 (idx 8)
 ];
 
 // 設定シートの行番号（debugScanScheduleRowsで確認済み）

@@ -12,12 +12,19 @@ const TIME_SLOTS: TimeSlot[] = [
   '終日',
 ]
 
-const FACILITIES: Facility[] = [
-  '第1体育館',
-  '第2体育館',
-  '総合体育館',
-  '第1・第2体育館',
-  '全施設',
+const FACILITY_GROUPS: { label: string; options: Facility[] }[] = [
+  {
+    label: '第1体育館',
+    options: ['第1体育館（全面）', '第1体育館 半面A', '第1体育館 半面B', '第1体育館 ステージ'],
+  },
+  {
+    label: '第2体育館',
+    options: ['第2体育館（全面）'],
+  },
+  {
+    label: '総合体育館',
+    options: ['総合体育館（全面）', '総合体育館 半面A', '総合体育館 半面B'],
+  },
 ]
 
 interface Props {
@@ -30,7 +37,7 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
   const { selectedClub, currentYear, currentMonth } = useAppStore()
   const [date, setDate] = useState(initialDate ?? format(new Date(currentYear, currentMonth - 1, 1), 'yyyy-MM-dd'))
   const [timeSlot, setTimeSlot] = useState<TimeSlot>('8:00〜11:00')
-  const [facility, setFacility] = useState<Facility>('第1体育館')
+  const [facility, setFacility] = useState<Facility>('第1体育館（全面）')
   const [content, setContent] = useState('')
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -98,7 +105,11 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
           onChange={(e) => setFacility(e.target.value as Facility)}
           className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          {FACILITIES.map((f) => <option key={f} value={f}>{f}</option>)}
+          {FACILITY_GROUPS.map((group) => (
+            <optgroup key={group.label} label={`── ${group.label} ──`}>
+              {group.options.map((f) => <option key={f} value={f}>{f}</option>)}
+            </optgroup>
+          ))}
         </select>
       </div>
 
