@@ -584,6 +584,43 @@ function writeLog_(action, actor, detail) {
 }
 
 // ==========================================
+// シート初期化
+// ==========================================
+function checkSheets() {
+  var missing = [];
+  if (!SS.getSheetByName('ログ')) missing.push('ログ');
+  if (!SS.getSheetByName('プッシュ通知登録')) missing.push('プッシュ通知登録');
+  if (!SS.getSheetByName('予約')) missing.push('予約');
+  Logger.log('不足シート: ' + (missing.length === 0 ? 'なし' : missing.join(', ')));
+  return { missing: missing };
+}
+
+function initializeSheets() {
+  var result = { created: [] };
+
+  if (!SS.getSheetByName('予約')) {
+    var s = SS.insertSheet('予約');
+    s.appendRow(['申請日時','申請者（クラブ）','半面A','半面B','全面','ステージ','第2全面','総合半面A','総合半面B','時間帯','内容','entryType','ステータス','コメント','管理者メモ','ID']);
+    result.created.push('予約');
+  }
+
+  if (!SS.getSheetByName('ログ')) {
+    var s = SS.insertSheet('ログ');
+    s.appendRow(['タイムスタンプ','アクション','実行者','詳細']);
+    result.created.push('ログ');
+  }
+
+  if (!SS.getSheetByName('プッシュ通知登録')) {
+    var s = SS.insertSheet('プッシュ通知登録');
+    s.appendRow(['登録日時','クラブ名','endpoint','p256dh','auth']);
+    result.created.push('プッシュ通知登録');
+  }
+
+  Logger.log('作成したシート: ' + (result.created.length === 0 ? 'なし' : result.created.join(', ')));
+  return result;
+}
+
+// ==========================================
 // デバッグ関数
 // ==========================================
 function debugScanScheduleRows() {
