@@ -17,7 +17,7 @@ export interface Reservation {
   status: ReservationStatus
   adminMemo: string
   updatedAt: string
-  entryType: 'reservation' | 'schedule' | 'deleted_slot'
+  entryType: 'reservation' | 'schedule' | 'deleted_slot' | 'confirmed_month'
 }
 
 export type TimeSlot =

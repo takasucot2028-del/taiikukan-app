@@ -57,6 +57,13 @@ export function Home() {
         </div>
       </header>
 
+      {/* 月間予定表 確定バッジ */}
+      {reservations.some((r) => r.entryType === 'confirmed_month' && r.date.startsWith(`${currentYear}-${String(currentMonth).padStart(2, '0')}`)) && (
+        <div className="bg-blue-600 text-white px-4 py-1.5 text-xs text-center font-medium">
+          ✓ {currentMonth}月の予定表は確定済みです
+        </div>
+      )}
+
       {/* GASエラー表示（カレンダーはブロックしない） */}
       {configError && (
         <div className="bg-red-50 border-b border-red-200 px-4 py-2">

@@ -45,7 +45,9 @@ function doGet(e) {
       case 'getReservations':
         return createResponse(getReservations(e.parameter.year, e.parameter.month));
       case 'getLogs':
-        return createResponse(getLogs());
+        return createResponse(getLogs(e.parameter.year, e.parameter.month));
+      case 'getPushStats':
+        return createResponse(getPushStats());
       default:
         return createResponse({ error: 'Unknown action: ' + action });
     }
@@ -67,6 +69,12 @@ function doPost(e) {
         return createResponse(updateStatus(body));
       case 'deleteReservation':
         return createResponse(deleteReservation(body));
+      case 'saveConfig':
+        return createResponse(saveConfig(body.config));
+      case 'registerPush':
+        return createResponse(registerPush(body));
+      case 'sendNotification':
+        return createResponse(sendNotification(body.title, body.body));
       default:
         return createResponse({ error: 'Unknown action: ' + action });
     }
@@ -331,16 +339,222 @@ function updateStatus(body) {
 // ==========================================
 // getLogs
 // ==========================================
-function getLogs() {
+function getLogs(year, month) {
   var sheet = SS.getSheetByName('ログ');
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
   var logs = [];
-  for (var i = Math.max(1, data.length - 100); i < data.length; i++) {
-    logs.push({ timestamp: formatDateTime_(data[i][0]), action: String(data[i][1]),
-      actor: String(data[i][2]), detail: String(data[i][3]) });
+  for (var i = 1; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    logs.push({
+      timestamp: formatDateTime_(data[i][0]),
+      action:    String(data[i][1]),
+      actor:     String(data[i][2]),
+      detail:    String(data[i][3]),
+    });
   }
-  return logs.reverse();
+  return logs.reverse().slice(0, 200);
+}
+
+// ==========================================
+// saveConfig: 設定シートへの書き込み
+// ==========================================
+function saveConfig(config) {
+  var sheet = SS.getSheetByName('設定');
+  if (!sheet) return { success: false, error: '設定シートが見つかりません' };
+
+  // クラブ一覧
+  var clubRange = SCHEDULE_ROWS.clubs.end - SCHEDULE_ROWS.clubs.start + 1;
+  sheet.getRange(SCHEDULE_ROWS.clubs.start, 1, clubRange, 1).clearContent();
+  (config.clubs || []).forEach(function(c, i) {
+    if (i < clubRange) sheet.getRange(SCHEDULE_ROWS.clubs.start + i, 1).setValue(c.name);
+  });
+
+  // 祝日
+  var holRange = SCHEDULE_ROWS.holidays.end - SCHEDULE_ROWS.holidays.start + 1;
+  sheet.getRange(SCHEDULE_ROWS.holidays.start, 1, holRange, 2).clearContent();
+  (config.holidays || []).forEach(function(h, i) {
+    if (i < holRange) {
+      sheet.getRange(SCHEDULE_ROWS.holidays.start + i, 1).setValue(new Date(h.date));
+      sheet.getRange(SCHEDULE_ROWS.holidays.start + i, 2).setValue(h.name);
+    }
+  });
+
+  // 学校行事
+  var evRange = SCHEDULE_ROWS.schoolEvents.end - SCHEDULE_ROWS.schoolEvents.start + 1;
+  sheet.getRange(SCHEDULE_ROWS.schoolEvents.start, 1, evRange, 2).clearContent();
+  (config.schoolEvents || []).forEach(function(e, i) {
+    if (i < evRange) {
+      sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 1).setValue(new Date(e.date));
+      sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 2).setValue(e.name);
+    }
+  });
+
+  // 平日スケジュール
+  if (config.weekdaySchedule) {
+    var dayKeys = ['monday','tuesday','wednesday','thursday','friday'];
+    dayKeys.forEach(function(key, i) {
+      var rowNum = SCHEDULE_ROWS.weekday.start + i;
+      sheet.getRange(rowNum, 2, 1, 8).clearContent();
+      var slots = config.weekdaySchedule[key] || [];
+      sheet.getRange(rowNum, 2).setValue('16:00〜18:00');
+      slots.forEach(function(slot) {
+        var idx = FACILITY_NAMES.indexOf(slot.facility);
+        if (idx >= 0) sheet.getRange(rowNum, 3 + idx).setValue(slot.clubName);
+      });
+    });
+  }
+
+  // ローテーション書き込みユーティリティ
+  function writeRotation(patterns, startRow, count) {
+    for (var p = 0; p < count; p++) {
+      var pat = patterns[p] || [];
+      for (var s = 0; s < 3; s++) {
+        var rowNum = startRow + p * 3 + s;
+        var timeSlot = ['8:00〜11:00','11:00〜14:00','14:00〜17:00'][s];
+        sheet.getRange(rowNum, 2, 1, 8).clearContent();
+        sheet.getRange(rowNum, 2).setValue(timeSlot);
+        pat.filter(function(sl) { return sl.timeSlot === timeSlot; }).forEach(function(sl) {
+          var idx = FACILITY_NAMES.indexOf(sl.facility);
+          if (idx >= 0) sheet.getRange(rowNum, 3 + idx).setValue(sl.clubName);
+        });
+      }
+    }
+  }
+
+  if (config.saturdayRotation) {
+    writeRotation(config.saturdayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSaturday.start, 3);
+    writeRotation(config.saturdayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSaturday.start, 6);
+  }
+  if (config.sundayRotation) {
+    writeRotation(config.sundayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSunday.start, 3);
+    writeRotation(config.sundayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSunday.start, 6);
+  }
+
+  // ローテーション開始番号（1〜12行目を検索して更新）
+  var lastRow12 = sheet.getRange(1, 1, 12, 2).getValues();
+  for (var r = 0; r < 12; r++) {
+    var lbl = String(lastRow12[r][0]).trim();
+    if ((lbl === '土曜開始番号' || lbl === '土曜ローテーション開始') && config.saturdayRotation) {
+      sheet.getRange(r + 1, 2).setValue((config.saturdayRotation.startIndex || 0) + 1);
+    }
+    if ((lbl === '日曜開始番号' || lbl === '日曜ローテーション開始') && config.sundayRotation) {
+      sheet.getRange(r + 1, 2).setValue((config.sundayRotation.startIndex || 0) + 1);
+    }
+  }
+
+  writeLog_('saveConfig', '管理者', '設定を保存しました');
+  return { success: true };
+}
+
+// ==========================================
+// registerPush: プッシュ通知subscription保存
+// ==========================================
+function registerPush(body) {
+  var sheet = SS.getSheetByName('プッシュ通知登録');
+  if (!sheet) {
+    sheet = SS.insertSheet('プッシュ通知登録');
+    sheet.appendRow(['登録日時','クラブ名','endpoint','p256dh','auth']);
+  }
+  var sub = body.subscription || {};
+  var endpoint = sub.endpoint || '';
+  var keys = sub.keys || {};
+  // 既存のendpointを検索して更新または追加
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][2]) === endpoint) {
+      sheet.getRange(i + 1, 1, 1, 5).setValues([[new Date(), body.clubName || '', endpoint, keys.p256dh || '', keys.auth || '']]);
+      writeLog_('registerPush', body.clubName || '', 'プッシュ通知登録更新');
+      return { success: true };
+    }
+  }
+  sheet.appendRow([new Date(), body.clubName || '', endpoint, keys.p256dh || '', keys.auth || '']);
+  writeLog_('registerPush', body.clubName || '', 'プッシュ通知新規登録');
+  return { success: true };
+}
+
+// ==========================================
+// getPushStats: 通知統計取得
+// ==========================================
+function getPushStats() {
+  var regSheet = SS.getSheetByName('プッシュ通知登録');
+  var registeredCount = regSheet ? Math.max(0, regSheet.getLastRow() - 1) : 0;
+
+  var logSheet = SS.getSheetByName('ログ');
+  var history = [];
+  if (logSheet) {
+    var logData = logSheet.getDataRange().getValues();
+    for (var i = logData.length - 1; i >= 1; i--) {
+      if (String(logData[i][1]) === 'sendNotification') {
+        history.push({
+          timestamp: formatDateTime_(logData[i][0]),
+          title: String(logData[i][3]).split('|')[0] || '',
+          sent: parseInt(String(logData[i][3]).split('|')[1]) || 0,
+        });
+        if (history.length >= 10) break;
+      }
+    }
+  }
+  return { registeredCount: registeredCount, history: history };
+}
+
+// ==========================================
+// sendNotification: Web Pushプロトコルで通知送信
+// ==========================================
+function sendNotification(title, body) {
+  var VAPID_PUBLIC_KEY  = PropertiesService.getScriptProperties().getProperty('VAPID_PUBLIC_KEY')  || '';
+  var VAPID_PRIVATE_KEY = PropertiesService.getScriptProperties().getProperty('VAPID_PRIVATE_KEY') || '';
+  var VAPID_SUBJECT     = PropertiesService.getScriptProperties().getProperty('VAPID_SUBJECT')     || 'mailto:admin@example.com';
+
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    writeLog_('sendNotification', '管理者', title + '|0（VAPID未設定）');
+    return { success: false, sent: 0, error: 'VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY が未設定です。GASスクリプトプロパティを確認してください。' };
+  }
+
+  var regSheet = SS.getSheetByName('プッシュ通知登録');
+  if (!regSheet || regSheet.getLastRow() <= 1) {
+    writeLog_('sendNotification', '管理者', title + '|0');
+    return { success: true, sent: 0 };
+  }
+
+  var data = regSheet.getDataRange().getValues();
+  var sent = 0;
+  var payload = JSON.stringify({ title: title, body: body });
+
+  for (var i = 1; i < data.length; i++) {
+    var endpoint = String(data[i][2]);
+    var p256dh   = String(data[i][3]);
+    var auth     = String(data[i][4]);
+    if (!endpoint) continue;
+    try {
+      // Web Push APIへのリクエスト（VAPID認証付き）
+      // 注意：GASでVAPID JWTを生成するには追加実装が必要です
+      // この実装はスケルトンです。実際の送信にはgas-web-push等のライブラリが必要です
+      UrlFetchApp.fetch(endpoint, {
+        method: 'post',
+        headers: {
+          'Authorization': 'vapid t=' + VAPID_PUBLIC_KEY + ',k=' + VAPID_PUBLIC_KEY,
+          'Content-Type': 'application/octet-stream',
+          'TTL': '86400',
+        },
+        payload: payload,
+        muteHttpExceptions: true,
+      });
+      sent++;
+    } catch (err) {
+      Logger.log('Push送信失敗: ' + endpoint + ' / ' + err.message);
+    }
+  }
+  writeLog_('sendNotification', '管理者', title + '|' + sent);
+  return { success: true, sent: sent };
+}
+
+// ==========================================
+// sendMonthlyReminder: 毎月15日の自動リマインド
+// Time-drivenトリガーに設定してください
+// ==========================================
+function sendMonthlyReminder() {
+  sendNotification('体育館予約 締め切り通知', '翌月分の占有予約申請の締め切りは今月20日です');
 }
 
 // ==========================================

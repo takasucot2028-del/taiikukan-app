@@ -66,4 +66,40 @@ export const gasApi = {
   /** deleted_slot を削除してスロットを元に戻す */
   restoreSlot: (id: string) =>
     gasPost<{ success: boolean }>('deleteReservation', { id }),
+
+  /** 月間予定表を確定する */
+  confirmMonth: (year: number, month: number) =>
+    gasPost<{ success: boolean; id: string }>('addReservation', {
+      clubName: '管理者',
+      date: `${year}-${String(month).padStart(2, '0')}-01`,
+      timeSlot: '',
+      facility: '',
+      content: `${year}年${month}月`,
+      comment: '',
+      entryType: 'confirmed_month',
+    }),
+
+  /** 月間確定を取り消す */
+  unconfirmMonth: (id: string) =>
+    gasPost<{ success: boolean }>('deleteReservation', { id }),
+
+  /** 設定を保存する */
+  saveConfig: (config: AppConfig & { satStartIndex?: number; sunStartIndex?: number }) =>
+    gasPost<{ success: boolean }>('saveConfig', { config }),
+
+  /** ログを取得する */
+  getLogs: (params?: { year?: string; month?: string }) =>
+    gasGet<{ timestamp: string; action: string; actor: string; detail: string }[]>('getLogs', params ?? {}),
+
+  /** プッシュ通知subscriptionを登録 */
+  registerPush: (subscription: PushSubscriptionJSON, clubName: string) =>
+    gasPost<{ success: boolean }>('registerPush', { subscription, clubName }),
+
+  /** プッシュ通知を送信 */
+  sendPushNotification: (title: string, body: string) =>
+    gasPost<{ success: boolean; sent: number }>('sendNotification', { title, body }),
+
+  /** プッシュ通知の統計を取得 */
+  getPushStats: () =>
+    gasGet<{ registeredCount: number; history: { timestamp: string; title: string; sent: number }[] }>('getPushStats'),
 }
