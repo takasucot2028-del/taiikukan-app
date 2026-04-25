@@ -110,6 +110,7 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
   const [date, setDate] = useState('')
   const [name, setName] = useState('')
   const [scheduleType, setScheduleType] = useState<'weekday' | 'rotation'>('weekday')
+  const [editingKey, setEditingKey] = useState<string | null>(null) // "date|name" で編集対象を識別
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -123,36 +124,67 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
     finally { setSaving(false); setTimeout(() => setMsg(''), 3000) }
   }
 
-  const TYPE_LABEL: Record<string, string> = {
-    weekday:  '平日',
-    rotation: '休日',
+  const resetForm = () => { setDate(''); setName(''); setScheduleType('weekday'); setEditingKey(null) }
+
+  const startEdit = (e: SchoolEvent) => {
+    setDate(e.date)
+    setName(e.name)
+    setScheduleType(e.type ?? 'weekday')
+    setEditingKey(`${e.date}|${e.name}`)
+  }
+
+  const handleSubmit = () => {
+    if (!date || !name.trim()) return
+    const newEvent: SchoolEvent = { date, name: name.trim(), type: scheduleType }
+    let updated: SchoolEvent[]
+    if (editingKey) {
+      const [origDate, origName] = editingKey.split('|')
+      updated = events.map((x) => (x.date === origDate && x.name === origName) ? newEvent : x)
+    } else {
+      updated = [...events, newEvent]
+    }
+    doSave(updated).then(resetForm)
   }
 
   return (
     <div className="space-y-3">
       {msg && <div className="bg-green-100 text-green-800 text-sm px-3 py-2 rounded">{msg}</div>}
+
       <div className="space-y-2 max-h-72 overflow-y-auto">
-        {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((e) => (
-          <div key={`${e.date}-${e.name}`} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2">
-            <span className="text-sm text-gray-700 flex items-center gap-2">
-              {e.date}　{e.name}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${e.type === 'rotation' ? 'bg-orange-100 text-orange-700' : 'bg-cyan-100 text-cyan-700'}`}>
-                {TYPE_LABEL[e.type ?? 'weekday']}
+        {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((e) => {
+          const isEditing = editingKey === `${e.date}|${e.name}`
+          return (
+            <div key={`${e.date}-${e.name}`}
+              className={`flex items-center justify-between border rounded-lg px-3 py-2 ${isEditing ? 'bg-blue-50 border-blue-400' : 'bg-white'}`}>
+              <span className="text-sm text-gray-700 flex items-center gap-2 min-w-0">
+                <span className="shrink-0">{e.date}</span>
+                <span className="truncate">{e.name}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${e.type === 'rotation' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {e.type === 'rotation' ? '休日' : '平日'}
+                </span>
               </span>
-            </span>
-            <button onClick={() => doSave(events.filter((x) => !(x.date === e.date && x.name === e.name)))}
-              className="text-red-500 text-xs px-2 shrink-0">削除</button>
-          </div>
-        ))}
+              <span className="flex gap-1 shrink-0 ml-2">
+                <button onClick={() => isEditing ? resetForm() : startEdit(e)}
+                  className={`text-xs px-2 py-0.5 rounded ${isEditing ? 'bg-gray-200 text-gray-600' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>
+                  {isEditing ? 'キャンセル' : '編集'}
+                </button>
+                <button onClick={() => doSave(events.filter((x) => !(x.date === e.date && x.name === e.name)))}
+                  className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-600 hover:bg-red-200">削除</button>
+              </span>
+            </div>
+          )
+        })}
       </div>
+
       <div className="border rounded-lg p-3 bg-white space-y-3">
+        <p className="text-xs font-semibold text-gray-500">{editingKey ? '✏️ 編集中' : '＋ 新規追加'}</p>
         <div className="flex gap-2">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
             className="border rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500" />
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="行事名"
             className="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div className="flex gap-4 text-sm">
+        <div className="flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input type="radio" name="scheduleType" value="weekday"
               checked={scheduleType === 'weekday'} onChange={() => setScheduleType('weekday')} />
@@ -164,12 +196,18 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
             <span>休日ローテーション（夏休み・冬休みなど）</span>
           </label>
         </div>
-        <button onClick={() => {
-          if (!date || !name.trim()) return
-          doSave([...events, { date, name: name.trim(), type: scheduleType }])
-            .then(() => { setDate(''); setName(''); setScheduleType('weekday') })
-        }} disabled={saving || !date || !name.trim()}
-          className="w-full bg-blue-600 text-white rounded-lg px-3 py-2 text-sm disabled:opacity-50">追加</button>
+        <div className="flex gap-2">
+          {editingKey && (
+            <button onClick={resetForm}
+              className="flex-1 border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-sm">
+              キャンセル
+            </button>
+          )}
+          <button onClick={handleSubmit} disabled={saving || !date || !name.trim()}
+            className="flex-1 bg-blue-600 text-white rounded-lg px-3 py-2 text-sm disabled:opacity-50">
+            {saving ? '保存中...' : editingKey ? '更新する' : '追加する'}
+          </button>
+        </div>
       </div>
     </div>
   )

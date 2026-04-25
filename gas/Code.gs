@@ -643,6 +643,20 @@ function debugScanScheduleRows() {
   }
 }
 
+function debugSchoolEvents() {
+  var sheet = SS.getSheetByName('設定');
+  if (!sheet) { Logger.log('設定シートが見つかりません'); return; }
+  var data = sheet.getRange(115, 1, 36, 3).getValues();
+  data.forEach(function(row, i) {
+    if (row[0] || row[1]) {
+      var dateVal = row[0] instanceof Date
+        ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd')
+        : String(row[0]);
+      Logger.log((115 + i) + ': 日付=' + dateVal + ' 行事名=' + row[1] + ' 種別=' + row[2]);
+    }
+  });
+}
+
 function testGetConfig() {
   var result = getConfig();
   Logger.log('クラブ数: ' + result.clubs.length);

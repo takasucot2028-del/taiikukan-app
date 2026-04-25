@@ -10,10 +10,13 @@ export function getDayType(
   config: AppConfig,
 ): { type: DayType; eventName?: string; scheduleType?: 'weekday' | 'rotation' } {
   const schoolEvent = config.schoolEvents.find((e) => e.date === dateStr)
-  if (schoolEvent) return {
-    type: 'schoolEvent',
-    eventName: schoolEvent.name,
-    scheduleType: schoolEvent.type ?? 'weekday',
+  if (schoolEvent) {
+    console.log(`[scheduleLogic] 学校行事 ${dateStr}: name=${schoolEvent.name} type=${schoolEvent.type ?? 'weekday(default)'}`)
+    return {
+      type: 'schoolEvent',
+      eventName: schoolEvent.name,
+      scheduleType: schoolEvent.type ?? 'weekday',
+    }
   }
 
   const holiday = config.holidays.find((h) => h.date === dateStr)
