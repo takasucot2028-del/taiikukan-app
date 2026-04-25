@@ -112,7 +112,7 @@ export function Home() {
             自分の予約
           </button>
           <button
-            onClick={() => window.open('#/print', '_blank')}
+            onClick={() => window.open(`#/print?year=${currentYear}&month=${currentMonth}`, '_blank')}
             className="text-xs bg-blue-500 px-2 py-1 rounded border border-blue-300"
           >
             印刷

@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { format, eachDayOfInterval, startOfMonth, endOfMonth, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useAppStore } from '../store'
-import { useReservations, useConfig } from '../hooks/useReservations'
+import { useConfig } from '../hooks/useReservations'
+import { gasApi } from '../lib/gasApi'
 import { getDayType, getDaySchedule } from '../lib/scheduleLogic'
 import { getClubColor } from '../lib/clubColors'
 import type { Reservation } from '../types'
@@ -59,14 +61,30 @@ interface DayRow {
 }
 
 export function PrintSchedule() {
+  const [searchParams] = useSearchParams()
   const { currentYear, currentMonth } = useAppStore()
   const { config } = useConfig()
-  const { reservations } = useReservations()
+
+  const initYear = parseInt(searchParams.get('year') ?? String(currentYear), 10)
+  const initMonth = parseInt(searchParams.get('month') ?? String(currentMonth), 10)
+
+  const [printYear, setPrintYear] = useState(initYear)
+  const [printMonth, setPrintMonth] = useState(initMonth)
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    gasApi.getReservations(printYear, printMonth)
+      .then(setReservations)
+      .catch(() => setReservations([]))
+      .finally(() => setLoading(false))
+  }, [printYear, printMonth])
 
   const rows = useMemo<DayRow[]>(() => {
     if (!config) return []
 
-    const firstDay = startOfMonth(new Date(currentYear, currentMonth - 1))
+    const firstDay = startOfMonth(new Date(printYear, printMonth - 1))
     const days = eachDayOfInterval({ start: firstDay, end: endOfMonth(firstDay) })
     const result: DayRow[] = []
 
@@ -80,7 +98,7 @@ export function PrintSchedule() {
         ? ['16:00〜18:00']
         : ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
 
-      const baseSlots = getDaySchedule(dateStr, config, currentMonth)
+      const baseSlots = getDaySchedule(dateStr, config, printMonth)
       const dayRes = reservations.filter((r: Reservation) => r.date === dateStr)
       const deletedSlots = dayRes.filter((r: Reservation) => r.entryType === 'deleted_slot')
       const userSchedule = dayRes.filter((r: Reservation) => r.entryType === 'schedule')
@@ -92,15 +110,10 @@ export function PrintSchedule() {
           const deleted = deletedSlots.find((r: Reservation) => r.timeSlot === slot && r.facility === fac)
           const fixed = baseSlots.find((s) => s.timeSlot === slot && s.facility === fac)
 
-          if (userEntry) {
-            facilities[fac] = userEntry.clubName
-          } else if (deleted) {
-            facilities[fac] = ''
-          } else if (fixed) {
-            facilities[fac] = fixed.clubName
-          } else {
-            facilities[fac] = ''
-          }
+          if (userEntry) facilities[fac] = userEntry.clubName
+          else if (deleted) facilities[fac] = ''
+          else if (fixed) facilities[fac] = fixed.clubName
+          else facilities[fac] = ''
         })
 
         result.push({
@@ -118,30 +131,57 @@ export function PrintSchedule() {
     })
 
     return result
-  }, [config, reservations, currentYear, currentMonth])
+  }, [config, reservations, printYear, printMonth])
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 印刷ボタン（印刷時非表示） */}
-      <div className="p-4 flex items-center gap-4 print:hidden border-b">
-        <h1 className="font-bold text-lg">{currentYear}年{currentMonth}月 体育館使用予定表</h1>
-        <button
-          onClick={() => window.print()}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-        >
-          印刷する
-        </button>
-        <button
-          onClick={() => window.close()}
-          className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
-        >
-          閉じる
-        </button>
+      {/* コントロールバー（印刷時非表示） */}
+      <div className="p-4 flex flex-wrap items-center gap-3 print:hidden border-b bg-gray-50">
+        <h1 className="font-bold text-base text-gray-800 mr-2">月間予定表 印刷</h1>
+
+        {/* 年月セレクター */}
+        <div className="flex items-center gap-2">
+          <select
+            value={printYear}
+            onChange={(e) => setPrintYear(Number(e.target.value))}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            {[2025, 2026, 2027].map((y) => (
+              <option key={y} value={y}>{y}年</option>
+            ))}
+          </select>
+          <select
+            value={printMonth}
+            onChange={(e) => setPrintMonth(Number(e.target.value))}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>{m}月</option>
+            ))}
+          </select>
+          {loading && <span className="text-xs text-gray-400">読み込み中...</span>}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-sm text-gray-600">{printYear}年{printMonth}月の予定表を印刷</span>
+          <button
+            onClick={() => window.print()}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          >
+            印刷する
+          </button>
+          <button
+            onClick={() => window.close()}
+            className="border border-gray-300 text-gray-600 px-3 py-2 rounded-lg text-sm hover:bg-gray-50"
+          >
+            閉じる
+          </button>
+        </div>
       </div>
 
       <div className="p-2 print:p-0">
         <h2 className="hidden print:block text-center font-bold text-base mb-2">
-          {currentYear}年{currentMonth}月 体育館使用予定表
+          {printYear}年{printMonth}月 体育館使用予定表
         </h2>
 
         <div className="overflow-x-auto">
@@ -167,28 +207,19 @@ export function PrintSchedule() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, idx) => {
+              {rows.map((row) => {
                 const bg = rowBg(row.type)
                 return (
                   <tr key={`${row.dateStr}-${row.timeSlot}`} className={bg}>
                     {row.isFirstRow && (
                       <>
-                        <td
-                          rowSpan={row.rowSpan}
-                          className="border border-gray-300 px-1 py-0.5 text-center font-medium align-middle"
-                        >
+                        <td rowSpan={row.rowSpan} className="border border-gray-300 px-1 py-0.5 text-center font-medium align-middle">
                           {row.dateLabel}
                         </td>
-                        <td
-                          rowSpan={row.rowSpan}
-                          className="border border-gray-300 px-1 py-0.5 text-center align-middle"
-                        >
+                        <td rowSpan={row.rowSpan} className="border border-gray-300 px-1 py-0.5 text-center align-middle">
                           {row.dow}
                         </td>
-                        <td
-                          rowSpan={row.rowSpan}
-                          className="border border-gray-300 px-1 py-0.5 text-center align-middle text-[10px] leading-tight"
-                        >
+                        <td rowSpan={row.rowSpan} className="border border-gray-300 px-1 py-0.5 text-center align-middle text-[10px] leading-tight">
                           <div>{DAY_TYPE_LABEL[row.type] ?? row.type}</div>
                           {row.eventName && (
                             <div className="text-gray-500 mt-0.5 truncate" title={row.eventName}>{row.eventName}</div>
