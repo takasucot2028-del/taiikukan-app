@@ -4,6 +4,7 @@ import { ja } from 'date-fns/locale'
 import { DayDetailModal } from './DayDetailModal'
 import { getDayType, getDaySchedule, getDayClubSummary } from '../../lib/scheduleLogic'
 import { getClubColor } from '../../lib/clubColors'
+import { getRelatedClubs } from '../../lib/relatedClubs'
 import { useAppStore } from '../../store'
 import type { Reservation, AppConfig } from '../../types'
 
@@ -98,8 +99,9 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
           }
 
           const dayReservations = reservations.filter((r) => r.date === dateStr)
+          const filterClubs = filterClub ? getRelatedClubs(filterClub) : []
           const clubNames = config
-            ? getDayClubSummary(dateStr, config, month, filterClub, dayReservations)
+            ? getDayClubSummary(dateStr, config, month, filterClubs, dayReservations)
             : []
 
           const mobileMax = 3

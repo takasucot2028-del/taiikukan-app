@@ -14,8 +14,8 @@ const WEEKEND_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
 const ROT_CONFIGS = [
   { key: 'summerSat', label: '夏期土曜', rotation: 'saturdayRotation', patternsKey: 'summerPatterns', count: 3 },
   { key: 'summerSun', label: '夏期日曜', rotation: 'sundayRotation', patternsKey: 'summerPatterns', count: 3 },
-  { key: 'winterSat', label: '冬期土曜', rotation: 'saturdayRotation', patternsKey: 'winterPatterns', count: 6 },
-  { key: 'winterSun', label: '冬期日曜', rotation: 'sundayRotation', patternsKey: 'winterPatterns', count: 6 },
+  { key: 'winterSat', label: '冬期土曜', rotation: 'saturdayRotation', patternsKey: 'winterPatterns', count: 3 },
+  { key: 'winterSun', label: '冬期日曜', rotation: 'sundayRotation', patternsKey: 'winterPatterns', count: 3 },
 ] as const
 
 function ClubTab({ config, onSave }: { config: AppConfig; onSave: (c: AppConfig) => Promise<void> }) {
@@ -109,6 +109,7 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
   const [events, setEvents] = useState<SchoolEvent[]>(config.schoolEvents)
   const [date, setDate] = useState('')
   const [name, setName] = useState('')
+  const [scheduleType, setScheduleType] = useState<'weekday' | 'rotation'>('weekday')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -122,28 +123,53 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
     finally { setSaving(false); setTimeout(() => setMsg(''), 3000) }
   }
 
+  const TYPE_LABEL: Record<string, string> = {
+    weekday:  '平日',
+    rotation: '休日',
+  }
+
   return (
     <div className="space-y-3">
       {msg && <div className="bg-green-100 text-green-800 text-sm px-3 py-2 rounded">{msg}</div>}
       <div className="space-y-2 max-h-72 overflow-y-auto">
         {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((e) => (
           <div key={`${e.date}-${e.name}`} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2">
-            <span className="text-sm text-gray-700">{e.date}　{e.name}</span>
+            <span className="text-sm text-gray-700 flex items-center gap-2">
+              {e.date}　{e.name}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${e.type === 'rotation' ? 'bg-orange-100 text-orange-700' : 'bg-cyan-100 text-cyan-700'}`}>
+                {TYPE_LABEL[e.type ?? 'weekday']}
+              </span>
+            </span>
             <button onClick={() => doSave(events.filter((x) => !(x.date === e.date && x.name === e.name)))}
-              className="text-red-500 text-xs px-2">削除</button>
+              className="text-red-500 text-xs px-2 shrink-0">削除</button>
           </div>
         ))}
       </div>
-      <div className="flex gap-2">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="border rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500" />
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="行事名"
-          className="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" />
+      <div className="border rounded-lg p-3 bg-white space-y-3">
+        <div className="flex gap-2">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            className="border rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="行事名"
+            className="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div className="flex gap-4 text-sm">
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="scheduleType" value="weekday"
+              checked={scheduleType === 'weekday'} onChange={() => setScheduleType('weekday')} />
+            <span>平日スケジュール（通常授業・行事など）</span>
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="scheduleType" value="rotation"
+              checked={scheduleType === 'rotation'} onChange={() => setScheduleType('rotation')} />
+            <span>休日ローテーション（夏休み・冬休みなど）</span>
+          </label>
+        </div>
         <button onClick={() => {
           if (!date || !name.trim()) return
-          doSave([...events, { date, name: name.trim() }]).then(() => { setDate(''); setName('') })
+          doSave([...events, { date, name: name.trim(), type: scheduleType }])
+            .then(() => { setDate(''); setName(''); setScheduleType('weekday') })
         }} disabled={saving || !date || !name.trim()}
-          className="bg-blue-600 text-white rounded-lg px-3 py-2 text-sm disabled:opacity-50">追加</button>
+          className="w-full bg-blue-600 text-white rounded-lg px-3 py-2 text-sm disabled:opacity-50">追加</button>
       </div>
     </div>
   )

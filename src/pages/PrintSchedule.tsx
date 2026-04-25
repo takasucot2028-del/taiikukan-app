@@ -29,13 +29,13 @@ const FACILITY_SHORT: Record<string, string> = {
   '総合体育館 半面B':   '総合\n半面B',
 }
 
-const DAY_TYPE_LABEL: Record<string, string> = {
-  weekday:     '平日',
-  saturday:    '土曜',
-  sunday:      '日曜',
-  holiday:     '祝日',
-  schoolEvent: '学校行事',
-  longBreak:   '長期休業',
+function getDayTypeLabel(type: string, scheduleType?: string): string {
+  if (type === 'schoolEvent') return scheduleType === 'rotation' ? '学校行事（休日）' : '学校行事（平日）'
+  const MAP: Record<string, string> = {
+    weekday: '平日', saturday: '土曜', sunday: '日曜',
+    holiday: '祝日', longBreak: '長期休業',
+  }
+  return MAP[type] ?? type
 }
 
 function rowBg(type: string): string {
@@ -53,6 +53,7 @@ interface DayRow {
   dateLabel: string
   dow: string
   type: string
+  scheduleType?: string
   eventName: string
   timeSlot: string
   facilities: Record<string, string>
@@ -90,10 +91,10 @@ export function PrintSchedule() {
 
     days.forEach((day) => {
       const dateStr = format(day, 'yyyy-MM-dd')
-      const { type, eventName } = getDayType(dateStr, config)
+      const { type, eventName, scheduleType } = getDayType(dateStr, config)
       const dow = format(day, 'EEE', { locale: ja })
       const dateLabel = format(day, 'M/d')
-      const isWeekday = type === 'weekday' || type === 'schoolEvent'
+      const isWeekday = type === 'weekday' || (type === 'schoolEvent' && scheduleType !== 'rotation')
       const timeSlots = isWeekday
         ? ['16:00〜18:00']
         : ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
@@ -121,6 +122,7 @@ export function PrintSchedule() {
           dateLabel,
           dow,
           type,
+          scheduleType,
           eventName: eventName ?? '',
           timeSlot: slot,
           facilities,
@@ -220,7 +222,7 @@ export function PrintSchedule() {
                           {row.dow}
                         </td>
                         <td rowSpan={row.rowSpan} className="border border-gray-300 px-1 py-0.5 text-center align-middle text-[10px] leading-tight">
-                          <div>{DAY_TYPE_LABEL[row.type] ?? row.type}</div>
+                          <div>{getDayTypeLabel(row.type, row.scheduleType)}</div>
                           {row.eventName && (
                             <div className="text-gray-500 mt-0.5 truncate" title={row.eventName}>{row.eventName}</div>
                           )}

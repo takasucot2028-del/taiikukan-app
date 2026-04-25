@@ -45,6 +45,7 @@ export interface Holiday {
 export interface SchoolEvent {
   date: string
   name: string
+  type?: 'weekday' | 'rotation'  // 省略時は平日扱い
 }
 
 // 施設・時間帯ごとの使用1コマ

@@ -109,11 +109,12 @@ function getConfig() {
     if (d && n) holidays.push({ date: formatDate_(d), name: n });
   }
 
-  // ---- 学校行事 ----
+  // ---- 学校行事（A=日付, B=行事名, C=種別） ----
   var schoolEvents = [];
   for (var r = SCHEDULE_ROWS.schoolEvents.start; r <= Math.min(SCHEDULE_ROWS.schoolEvents.end, lastRow); r++) {
     var d = data[r - 1][0], n = String(data[r - 1][1]).trim();
-    if (d && n) schoolEvents.push({ date: formatDate_(d), name: n });
+    var t = data[r - 1][2] ? String(data[r - 1][2]).trim() : '';
+    if (d && n) schoolEvents.push({ date: formatDate_(d), name: n, type: (t === 'rotation' ? 'rotation' : 'weekday') });
   }
 
   // ---- 管理者PIN ----
@@ -131,8 +132,8 @@ function getConfig() {
   // ---- ローテーション（夏期・冬期） ----
   var summerSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.summerSaturday.start, 3);
   var summerSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.summerSunday.start,   3);
-  var winterSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSaturday.start, 6);
-  var winterSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSunday.start,   6);
+  var winterSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSaturday.start, 3);
+  var winterSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSunday.start,   3);
 
   // ローテーション開始番号（A列に「土曜開始番号」「日曜開始番号」ラベルがある行を探す）
   var satStart = 0; // デフォルト：パターン①（0-indexed）
@@ -380,13 +381,14 @@ function saveConfig(config) {
     }
   });
 
-  // 学校行事
+  // 学校行事（A=日付, B=行事名, C=種別）
   var evRange = SCHEDULE_ROWS.schoolEvents.end - SCHEDULE_ROWS.schoolEvents.start + 1;
-  sheet.getRange(SCHEDULE_ROWS.schoolEvents.start, 1, evRange, 2).clearContent();
+  sheet.getRange(SCHEDULE_ROWS.schoolEvents.start, 1, evRange, 3).clearContent();
   (config.schoolEvents || []).forEach(function(e, i) {
     if (i < evRange) {
       sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 1).setValue(new Date(e.date));
       sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 2).setValue(e.name);
+      sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 3).setValue(e.type || 'weekday');
     }
   });
 
@@ -424,11 +426,11 @@ function saveConfig(config) {
 
   if (config.saturdayRotation) {
     writeRotation(config.saturdayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSaturday.start, 3);
-    writeRotation(config.saturdayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSaturday.start, 6);
+    writeRotation(config.saturdayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSaturday.start, 3);
   }
   if (config.sundayRotation) {
     writeRotation(config.sundayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSunday.start, 3);
-    writeRotation(config.sundayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSunday.start, 6);
+    writeRotation(config.sundayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSunday.start, 3);
   }
 
   // ローテーション開始番号（1〜12行目を検索して更新）
