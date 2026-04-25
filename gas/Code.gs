@@ -25,7 +25,7 @@ var SCHEDULE_ROWS = {
   winterSunday:       { start: 58, end: 75 }, // 冬期日曜 6パターン×3スロット（現在空）
   clubs:              { start: 80, end: 89 },
   holidays:           { start: 93, end: 110 },
-  schoolEvents:       { start: 115, end: 200 },
+  schoolEvents:       { start: 115, end: 220 },
   adminPinRow:        166,
 };
 
@@ -646,7 +646,7 @@ function debugScanScheduleRows() {
 function debugSchoolEvents() {
   var sheet = SS.getSheetByName('設定');
   if (!sheet) { Logger.log('設定シートが見つかりません'); return; }
-  var data = sheet.getRange(115, 1, 86, 3).getValues();
+  var data = sheet.getRange(115, 1, 106, 3).getValues();
   data.forEach(function(row, i) {
     if (row[0] || row[1]) {
       var dateVal = row[0] instanceof Date
