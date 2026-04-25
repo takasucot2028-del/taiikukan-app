@@ -112,6 +112,12 @@ export function Home() {
             自分の予約
           </button>
           <button
+            onClick={() => window.open('#/print', '_blank')}
+            className="text-xs bg-blue-500 px-2 py-1 rounded border border-blue-300"
+          >
+            印刷
+          </button>
+          <button
             onClick={handleChangeClub}
             className="text-xs bg-blue-500 px-2 py-1 rounded border border-blue-300"
           >
@@ -158,15 +164,16 @@ export function Home() {
 
       {/* フィルター */}
       <div className="bg-white px-4 py-2 flex items-center gap-2 border-b">
-        <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filterMine}
-            onChange={(e) => setFilterMine(e.target.checked)}
-            className="rounded"
-          />
-          自分のクラブのみ表示
-        </label>
+        <button
+          onClick={() => setFilterMine(!filterMine)}
+          className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+            filterMine
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white text-gray-600 border-gray-300'
+          }`}
+        >
+          自分のクラブのみ
+        </button>
         {config && (
           <span className="ml-auto text-xs text-gray-400">
             クラブ{config.clubs.length}件 / 祝日{config.holidays.length}件

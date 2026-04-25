@@ -6,6 +6,7 @@ import { ReservationForm } from '../Reservation/ReservationForm'
 import { ScheduleEntryForm } from '../Reservation/ScheduleEntryForm'
 import type { Reservation, SlotEntry, AppConfig } from '../../types'
 import { getDayType } from '../../lib/scheduleLogic'
+import { getClubColor } from '../../lib/clubColors'
 import { gasApi } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
 
@@ -174,8 +175,10 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
                 const fixedEntry = fixedEntries.find((s) => s.facility === facility)
 
                 if (userEntry) {
+                  const uc = getClubColor(userEntry.clubName)
+                  const isMyEntry = userEntry.clubName === selectedClub
                   return (
-                    <div key={facility} className="text-sm bg-green-50 text-green-800 px-2 py-1.5 rounded mb-1 flex items-center justify-between gap-1">
+                    <div key={facility} className={`text-sm px-2 py-1.5 rounded mb-1 flex items-center justify-between gap-1 ${uc.bg} ${uc.text} ${isMyEntry ? 'border-l-4 border-current' : ''}`}>
                       <span className="flex-1 min-w-0 break-words">{facility}：{userEntry.clubName}（{userEntry.content}）</span>
                       {userEntry.clubName === selectedClub && (
                         <span className="flex gap-1 shrink-0">
@@ -210,8 +213,10 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
                 }
 
                 if (fixedEntry) {
+                  const fc = getClubColor(fixedEntry.clubName)
+                  const isMyFixed = fixedEntry.clubName === selectedClub
                   return (
-                    <div key={facility} className="text-sm bg-gray-50 text-gray-700 px-2 py-1.5 rounded mb-1 flex items-center justify-between gap-1">
+                    <div key={facility} className={`text-sm px-2 py-1.5 rounded mb-1 flex items-center justify-between gap-1 ${fc.bg} ${fc.text} ${isMyFixed ? 'border-l-4 border-current' : ''}`}>
                       <span className="flex-1">{facility}：{fixedEntry.clubName}</span>
                       <button disabled={busy} onClick={() => handleDeleteFixedSlot(slot, facility, fixedEntry.clubName)}
                         className="text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 px-2 py-0.5 rounded shrink-0 disabled:opacity-50">

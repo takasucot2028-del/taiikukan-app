@@ -3,6 +3,8 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'dat
 import { ja } from 'date-fns/locale'
 import { DayDetailModal } from './DayDetailModal'
 import { getDayType, getDaySchedule, getDayClubSummary } from '../../lib/scheduleLogic'
+import { getClubColor } from '../../lib/clubColors'
+import { useAppStore } from '../../store'
 import type { Reservation, AppConfig } from '../../types'
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
@@ -19,10 +21,14 @@ interface Props {
 
 export function MonthCalendar({ year, month, reservations, config, filterClub, onMonthChange, onRefresh }: Props) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const { selectedClub } = useAppStore()
 
   const firstDay = startOfMonth(new Date(year, month - 1))
   const days = eachDayOfInterval({ start: firstDay, end: endOfMonth(firstDay) })
   const startPadding = getDay(firstDay)
+
+  const today = new Date()
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1
 
   const getDayBg = (dateStr: string): string => {
     const dow = getDay(new Date(dateStr + 'T00:00:00'))
@@ -44,13 +50,26 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
 
   const prevMonth = () => month === 1 ? onMonthChange(year - 1, 12) : onMonthChange(year, month - 1)
   const nextMonth = () => month === 12 ? onMonthChange(year + 1, 1) : onMonthChange(year, month + 1)
+  const goToday = () => onMonthChange(today.getFullYear(), today.getMonth() + 1)
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth} className="p-2 text-xl rounded-lg hover:bg-gray-100">‹</button>
-        <h2 className="text-lg font-bold">{format(firstDay, 'yyyy年M月', { locale: ja })}</h2>
-        <button onClick={nextMonth} className="p-2 text-xl rounded-lg hover:bg-gray-100">›</button>
+      {/* 月ナビゲーション */}
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <button onClick={prevMonth} className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 text-gray-600">
+          ‹ 前月
+        </button>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold">{format(firstDay, 'yyyy年M月', { locale: ja })}</h2>
+          {!isCurrentMonth && (
+            <button onClick={goToday} className="text-xs px-2 py-1 rounded border border-blue-400 text-blue-600 hover:bg-blue-50">
+              今月
+            </button>
+          )}
+        </div>
+        <button onClick={nextMonth} className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 text-gray-600">
+          翌月 ›
+        </button>
       </div>
 
       <div className="grid grid-cols-7 mb-1">
@@ -70,7 +89,6 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
           const dateStr = format(day, 'yyyy-MM-dd')
           const dow = getDay(day)
 
-          // イベント名（祝日・学校行事）
           let eventLabel = ''
           if (config) {
             const { type, eventName } = getDayType(dateStr, config)
@@ -79,15 +97,23 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
             }
           }
 
-          // スケジュールクラブ名一覧（deleted_slot・schedule優先適用）
           const dayReservations = reservations.filter((r) => r.date === dateStr)
           const clubNames = config
             ? getDayClubSummary(dateStr, config, month, filterClub, dayReservations)
             : []
 
-          // スマホ3件・PC5件
           const mobileMax = 3
           const pcMax = 5
+
+          const ClubBadge = ({ name, className = '' }: { name: string; className?: string }) => {
+            const c = getClubColor(name)
+            const isMyClub = name === selectedClub
+            return (
+              <span className={`text-[9px] md:text-xs px-1 rounded-full leading-tight truncate w-full inline-block ${c.bg} ${c.text} ${isMyClub && !filterClub ? 'ring-2 ring-offset-1 ring-current' : ''} ${className}`}>
+                {name}
+              </span>
+            )
+          }
 
           return (
             <button
@@ -107,27 +133,23 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
                 </span>
               )}
 
-              {/* スマホ表示（md未満）: 3件まで */}
-              <span className="md:hidden flex flex-col w-full overflow-hidden">
+              {/* スマホ（md未満）: 3件まで */}
+              <span className="md:hidden flex flex-col w-full overflow-hidden gap-0.5 mt-0.5">
                 {clubNames.slice(0, mobileMax).map((name, i) => (
-                  <span key={i} className="text-[9px] text-gray-700 leading-tight truncate w-full mt-0.5">
-                    {name}
-                  </span>
+                  <ClubBadge key={i} name={name} />
                 ))}
                 {clubNames.length > mobileMax && (
-                  <span className="text-[9px] text-gray-400 leading-tight mt-0.5">他{clubNames.length - mobileMax}件</span>
+                  <span className="text-[9px] text-gray-400 leading-tight">他{clubNames.length - mobileMax}件</span>
                 )}
               </span>
 
-              {/* PC表示（md以上）: 5件まで */}
-              <span className="hidden md:flex flex-col w-full overflow-hidden">
+              {/* PC（md以上）: 5件まで */}
+              <span className="hidden md:flex flex-col w-full overflow-hidden gap-0.5 mt-0.5">
                 {clubNames.slice(0, pcMax).map((name, i) => (
-                  <span key={i} className="text-xs text-gray-700 leading-tight truncate w-full mt-0.5">
-                    {name}
-                  </span>
+                  <ClubBadge key={i} name={name} />
                 ))}
                 {clubNames.length > pcMax && (
-                  <span className="text-xs text-gray-400 leading-tight mt-0.5">他{clubNames.length - pcMax}件</span>
+                  <span className="text-xs text-gray-400 leading-tight">他{clubNames.length - pcMax}件</span>
                 )}
               </span>
             </button>
