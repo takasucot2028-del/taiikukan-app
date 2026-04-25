@@ -28,25 +28,44 @@ export function getDayType(
   return { type: 'weekday' }
 }
 
-function getNthDayOfWeekInMonth(dateStr: string, targetDow: number): number {
+/** 指定日より前の月内「土曜として扱う」日の連番（0-indexed）を返す
+ *  土曜 + rotation学校行事の土曜 をカウント */
+function getNthSaturdayTypeInMonth(dateStr: string, config: AppConfig): number {
   const [year, month, day] = dateStr.split('-').map(Number)
   let count = 0
   for (let d = 1; d < day; d++) {
     const dow = getDay(new Date(year, month - 1, d))
-    if (dow === targetDow) count++
+    if (dow !== 6) continue // 土曜以外はスキップ
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const schoolEvent = config.schoolEvents.find((e) => e.date === ds)
+    // 土曜かつ（学校行事なし OR rotation学校行事）→ カウント
+    if (!schoolEvent || schoolEvent.type === 'rotation') count++
   }
   return count
 }
 
+/** 指定日より前の月内「日曜ローテーションとして扱う」日の連番（0-indexed）を返す
+ *  以下をカウント：
+ *  - 日曜（学校行事なし）
+ *  - 祝日（学校行事なし）
+ *  - rotation学校行事 の 非土曜日
+ *  - rotation学校行事 の 日曜日 */
 function getNthSundayTypeInMonth(dateStr: string, config: AppConfig): number {
   const [year, month, day] = dateStr.split('-').map(Number)
   let count = 0
   for (let d = 1; d < day; d++) {
     const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const dow = getDay(new Date(year, month - 1, d))
+    const schoolEvent = config.schoolEvents.find((e) => e.date === ds)
     const isHoliday = config.holidays.some((h) => h.date === ds)
-    const isSchoolEvent = config.schoolEvents.some((e) => e.date === ds)
-    if ((dow === 0 || isHoliday) && !isSchoolEvent) count++
+
+    if (schoolEvent) {
+      // rotation学校行事かつ非土曜 → 日曜ローテーションとしてカウント
+      if (schoolEvent.type === 'rotation' && dow !== 6) count++
+    } else {
+      // 通常の日曜 or 祝日
+      if (dow === 0 || isHoliday) count++
+    }
   }
   return count
 }
@@ -82,11 +101,11 @@ export function getDaySchedule(
 ): SlotEntry[] {
   const { type, scheduleType } = getDayType(dateStr, config)
   const summer = isSummer(month)
+  const dow = getDay(new Date(dateStr + 'T00:00:00'))
 
   // 平日 or 学校行事（平日スケジュール）
   if (type === 'weekday' || (type === 'schoolEvent' && scheduleType !== 'rotation')) {
     if (!config.weekdaySchedule) return []
-    const dow = getDay(new Date(dateStr + 'T00:00:00'))
     const keyMap: Record<number, keyof NonNullable<AppConfig['weekdaySchedule']>> = {
       1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday',
     }
@@ -95,19 +114,27 @@ export function getDaySchedule(
     return slots.map((s) => ({ ...s, timeSlot: s.timeSlot || '16:00〜18:00' }))
   }
 
-  // 土曜ローテーション
-  if (type === 'saturday') {
+  // 土曜ローテーション（通常土曜 + rotation学校行事の土曜）
+  if (type === 'saturday' || (type === 'schoolEvent' && scheduleType === 'rotation' && dow === 6)) {
     if (!config.saturdayRotation) return []
     const patterns = summer
       ? config.saturdayRotation.summerPatterns
       : config.saturdayRotation.winterPatterns
-    const nth = getNthDayOfWeekInMonth(dateStr, 6)
+    const nth = getNthSaturdayTypeInMonth(dateStr, config)
     const result = getRotationPattern(patterns, config.saturdayRotation.startIndex, nth)
-    console.log(`[schedule] 土曜 ${dateStr}: ${nth+1}番目 → ${result.length}スロット`)
+    const rotNum = config.saturdayRotation.summerPatterns.filter(p => p.length > 0).length
+    const patIdx = ((config.saturdayRotation.startIndex + nth) % Math.max(rotNum, 1)) + 1
+    console.log(`[schedule] 土曜ローテーション ${dateStr}(dow=${dow}): ${nth+1}番目 パターン${patIdx} → ${result.length}スロット`)
+    if (type === 'schoolEvent') {
+      console.log('[rotation debug]', {
+        date: dateStr, dayOfWeek: dow, rotation: 'saturday',
+        nth, patternIndex: patIdx, slots: result.length,
+      })
+    }
     return result
   }
 
-  // 日曜・祝日・長期休業・学校行事（休日ローテーション）
+  // 日曜・祝日・長期休業・学校行事（休日ローテーション・非土曜）
   if (
     type === 'sunday' ||
     type === 'holiday' ||
@@ -121,7 +148,15 @@ export function getDaySchedule(
     const nth = getNthSundayTypeInMonth(dateStr, config)
     const slots = getRotationPattern(patterns, config.sundayRotation.startIndex, nth)
     const result = applyNexusBcRule(slots)
-    console.log(`[schedule] 日曜/祝日/学校行事(rotation) ${dateStr}: ${nth+1}番目 → ${result.length}スロット`)
+    const rotNum = config.sundayRotation.summerPatterns.filter(p => p.length > 0).length
+    const patIdx = ((config.sundayRotation.startIndex + nth) % Math.max(rotNum, 1)) + 1
+    console.log(`[schedule] 日曜ローテーション ${dateStr}(dow=${dow}): ${nth+1}番目 パターン${patIdx} → ${result.length}スロット`)
+    if (type === 'schoolEvent') {
+      console.log('[rotation debug]', {
+        date: dateStr, dayOfWeek: dow, rotation: 'sunday',
+        nth, patternIndex: patIdx, slots: result.length,
+      })
+    }
     return result
   }
 
