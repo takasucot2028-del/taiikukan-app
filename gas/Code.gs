@@ -588,9 +588,9 @@ function writeLog_(action, actor, detail) {
 // ==========================================
 function checkSheets() {
   var missing = [];
+  if (!SS.getSheetByName('予約申請')) missing.push('予約申請');
   if (!SS.getSheetByName('ログ')) missing.push('ログ');
   if (!SS.getSheetByName('プッシュ通知登録')) missing.push('プッシュ通知登録');
-  if (!SS.getSheetByName('予約')) missing.push('予約');
   Logger.log('不足シート: ' + (missing.length === 0 ? 'なし' : missing.join(', ')));
   return { missing: missing };
 }
@@ -598,10 +598,10 @@ function checkSheets() {
 function initializeSheets() {
   var result = { created: [] };
 
-  if (!SS.getSheetByName('予約')) {
-    var s = SS.insertSheet('予約');
+  if (!SS.getSheetByName('予約申請')) {
+    var s = SS.insertSheet('予約申請');
     s.appendRow(['申請日時','申請者（クラブ）','半面A','半面B','全面','ステージ','第2全面','総合半面A','総合半面B','時間帯','内容','entryType','ステータス','コメント','管理者メモ','ID']);
-    result.created.push('予約');
+    result.created.push('予約申請');
   }
 
   if (!SS.getSheetByName('ログ')) {
