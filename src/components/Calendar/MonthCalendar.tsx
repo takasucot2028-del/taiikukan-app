@@ -85,46 +85,51 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
             ? getDayClubSummary(dateStr, config, month, filterClub, dayReservations)
             : []
 
-          // 予約バッジ
-          const dayRes = dayReservations.filter(
-            (r) => filterClub === '' || r.clubName === filterClub
-          )
-          const confirmedCount = dayRes.filter((r) => r.status === '確定').length
-          const pendingCount   = dayRes.filter((r) => r.status === '申請中').length
+          // スマホ3件・PC5件
+          const mobileMax = 3
+          const pcMax = 5
 
           return (
             <button
               key={dateStr}
               onClick={() => setSelectedDate(dateStr)}
-              className={`${getDayBg(dateStr)} min-h-[68px] md:min-h-32 p-1 md:p-2 text-left flex flex-col hover:brightness-95 active:brightness-90 transition-all`}
+              className={`${getDayBg(dateStr)} min-h-[68px] md:min-h-32 p-1 md:p-2 text-left flex flex-col overflow-hidden hover:brightness-95 active:brightness-90 transition-all`}
             >
-              <span className={`text-sm md:text-base font-medium leading-tight ${
+              <span className={`text-sm md:text-base font-medium leading-tight shrink-0 ${
                 dow === 0 ? 'text-orange-600' : dow === 6 ? 'text-sky-700' : 'text-gray-800'
               }`}>
                 {format(day, 'd')}
               </span>
 
               {eventLabel && (
-                <span className="text-[9px] md:text-xs text-gray-500 leading-tight truncate w-full mt-0.5">
+                <span className="text-[9px] md:text-xs text-gray-500 leading-tight truncate w-full mt-0.5 shrink-0">
                   {eventLabel}
                 </span>
               )}
 
-              {clubNames.slice(0, 3).map((name, i) => (
-                <span key={i} className="text-[9px] md:text-xs bg-gray-100 text-gray-600 rounded px-0.5 mt-0.5 leading-tight truncate w-full">
-                  {name}
-                </span>
-              ))}
-              {clubNames.length > 3 && (
-                <span className="text-[9px] md:text-xs text-gray-400 leading-tight">+{clubNames.length - 3}</span>
-              )}
+              {/* スマホ表示（md未満）: 3件まで */}
+              <span className="md:hidden flex flex-col w-full overflow-hidden">
+                {clubNames.slice(0, mobileMax).map((name, i) => (
+                  <span key={i} className="text-[9px] text-gray-700 leading-tight truncate w-full mt-0.5">
+                    {name}
+                  </span>
+                ))}
+                {clubNames.length > mobileMax && (
+                  <span className="text-[9px] text-gray-400 leading-tight mt-0.5">他{clubNames.length - mobileMax}件</span>
+                )}
+              </span>
 
-              {confirmedCount > 0 && (
-                <span className="text-[10px] md:text-xs bg-blue-600 text-white rounded px-1 mt-0.5 leading-tight">確{confirmedCount}</span>
-              )}
-              {pendingCount > 0 && (
-                <span className="text-[10px] md:text-xs bg-yellow-500 text-white rounded px-1 mt-0.5 leading-tight">申{pendingCount}</span>
-              )}
+              {/* PC表示（md以上）: 5件まで */}
+              <span className="hidden md:flex flex-col w-full overflow-hidden">
+                {clubNames.slice(0, pcMax).map((name, i) => (
+                  <span key={i} className="text-xs text-gray-700 leading-tight truncate w-full mt-0.5">
+                    {name}
+                  </span>
+                ))}
+                {clubNames.length > pcMax && (
+                  <span className="text-xs text-gray-400 leading-tight mt-0.5">他{clubNames.length - pcMax}件</span>
+                )}
+              </span>
             </button>
           )
         })}
@@ -135,8 +140,6 @@ export function MonthCalendar({ year, month, reservations, config, filterClub, o
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-100 border" />日曜</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border" />祝日</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-cyan-100 border" />学校行事</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-600" />確定予約</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-500" />申請中</span>
       </div>
 
       {selectedDate && (
