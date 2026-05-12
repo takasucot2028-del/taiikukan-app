@@ -1,5 +1,49 @@
-import type { AppConfig, Reservation } from '../types'
+import type { AppConfig, Rotation, DayPattern, Reservation } from '../types'
 import { getCached, setCache, clearCache, clearReservationCaches, CACHE_TTL } from './cache'
+
+// 旧GAS形式（summerPatterns/winterPatterns）と新形式（patterns）の両方を受け付ける
+type RawRotation = {
+  patterns?: DayPattern[]
+  summerPatterns?: DayPattern[]
+  winterPatterns?: DayPattern[]
+  startIndex?: number
+}
+
+function normalizeRotation(raw: RawRotation | null | undefined, winterPatterns?: DayPattern[]): Rotation | null {
+  if (!raw) return null
+  return {
+    patterns: raw.patterns ?? raw.summerPatterns ?? winterPatterns ?? [],
+    startIndex: raw.startIndex ?? 0,
+  }
+}
+
+function normalizeConfig(raw: Record<string, unknown>): AppConfig {
+  const rawSat = raw.saturdayRotation as RawRotation | null
+  const rawSun = raw.sundayRotation as RawRotation | null
+  return {
+    clubs:         (raw.clubs         as AppConfig['clubs'])         ?? [],
+    holidays:      (raw.holidays      as AppConfig['holidays'])      ?? [],
+    schoolEvents:  (raw.schoolEvents  as AppConfig['schoolEvents'])  ?? [],
+    adminPin:      (raw.adminPin      as string)                     ?? '',
+    weekdaySchedule: (raw.weekdaySchedule as AppConfig['weekdaySchedule']) ?? null,
+    // 夏季土曜：新形式 saturdayRotation.patterns、旧形式 saturdayRotation.summerPatterns
+    saturdayRotation: normalizeRotation(rawSat),
+    // 夏季日曜
+    sundayRotation:   normalizeRotation(rawSun),
+    // 夏季休暇（新規フィールド）
+    summerVacationRotation: (raw.summerVacationRotation as Rotation | null) ?? null,
+    // 冬季土曜：新形式 winterSaturdayRotation、旧形式 saturdayRotation.winterPatterns
+    winterSaturdayRotation:
+      (raw.winterSaturdayRotation as Rotation | null) ??
+      normalizeRotation(rawSat, rawSat?.winterPatterns),
+    // 冬季日曜
+    winterSundayRotation:
+      (raw.winterSundayRotation as Rotation | null) ??
+      normalizeRotation(rawSun, rawSun?.winterPatterns),
+    // 冬季休暇（新規フィールド）
+    winterVacationRotation: (raw.winterVacationRotation as Rotation | null) ?? null,
+  }
+}
 
 const GAS_URL = import.meta.env.VITE_GAS_URL ?? 'YOUR_GAS_WEBAPP_URL'
 
@@ -29,7 +73,8 @@ export const gasApi = {
   getConfig: async () => {
     const cached = getCached<AppConfig>('config', CACHE_TTL.config)
     if (cached) { console.log('[cache] config hit'); return cached }
-    const data = await gasGet<AppConfig>('getConfig')
+    const raw = await gasGet<Record<string, unknown>>('getConfig')
+    const data = normalizeConfig(raw)
     setCache('config', data)
     return data
   },

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useAppStore } from '../../store'
 import { gasApi } from '../../lib/gasApi'
 import { AdminNav } from '../../components/admin/AdminNav'
-import type { AppConfig, Club, Holiday, SchoolEvent, SlotEntry } from '../../types'
+import type { AppConfig, Rotation, Club, Holiday, SchoolEvent, SlotEntry } from '../../types'
 
 const TABS = ['クラブ', '祝日', '学校行事', '平日スケジュール', 'ローテーション', '開始番号'] as const
 type Tab = typeof TABS[number]
@@ -11,12 +11,16 @@ const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as con
 const WEEKDAY_LABELS: Record<string, string> = { monday: '月', tuesday: '火', wednesday: '水', thursday: '木', friday: '金' }
 const FACILITIES = ['第1体育館 半面A', '第1体育館 半面B', '第1体育館（全面）', '第1体育館 ステージ', '第2体育館（全面）', '総合体育館 半面A', '総合体育館 半面B']
 const WEEKEND_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
-const ROT_CONFIGS = [
-  { key: 'summerSat', label: '夏期土曜', rotation: 'saturdayRotation', patternsKey: 'summerPatterns', count: 3 },
-  { key: 'summerSun', label: '夏期日曜', rotation: 'sundayRotation', patternsKey: 'summerPatterns', count: 3 },
-  { key: 'winterSat', label: '冬期土曜', rotation: 'saturdayRotation', patternsKey: 'winterPatterns', count: 3 },
-  { key: 'winterSun', label: '冬期日曜', rotation: 'sundayRotation', patternsKey: 'winterPatterns', count: 3 },
-] as const
+
+// 6種類のローテーション設定（AppConfigのフィールド名を直接使用）
+const ROT_CONFIGS: { key: keyof AppConfig; label: string; count: number }[] = [
+  { key: 'saturdayRotation',       label: '夏季土曜', count: 3 },
+  { key: 'sundayRotation',         label: '夏季日曜', count: 3 },
+  { key: 'summerVacationRotation', label: '夏季休暇', count: 3 },
+  { key: 'winterSaturdayRotation', label: '冬季土曜', count: 3 },
+  { key: 'winterSundayRotation',   label: '冬季日曜', count: 3 },
+  { key: 'winterVacationRotation', label: '冬季休暇', count: 3 },
+]
 
 function ClubTab({ config, onSave }: { config: AppConfig; onSave: (c: AppConfig) => Promise<void> }) {
   const [clubs, setClubs] = useState<Club[]>(config.clubs)
@@ -289,17 +293,13 @@ function RotationTab({ config, onSave }: { config: AppConfig; onSave: (c: AppCon
   const [msg, setMsg] = useState('')
   const clubs = config.clubs.map((c) => c.name)
 
-  // Local edit state: { [rotKey]: SlotEntry[][] (patterns × slots) }
-  const initPatterns = (count: number, src: AppConfig, rotKey: string, pKey: string): SlotEntry[][] => {
-    const rot = src[rotKey as keyof AppConfig] as { summerPatterns: SlotEntry[][]; winterPatterns: SlotEntry[][] } | null
-    const pats = rot?.[pKey as 'summerPatterns' | 'winterPatterns'] ?? []
-    return Array.from({ length: count }, (_, i) => pats[i] ?? [])
-  }
-
+  // { [rotKey]: SlotEntry[][] } - パターン数 × スロット数の編集ステート
   const [patterns, setPatterns] = useState<Record<string, SlotEntry[][]>>(() => {
     const r: Record<string, SlotEntry[][]> = {}
-    ROT_CONFIGS.forEach(({ key, rotation, patternsKey, count }) => {
-      r[key] = initPatterns(count, config, rotation, patternsKey)
+    ROT_CONFIGS.forEach(({ key, count }) => {
+      const rot = config[key] as Rotation | null
+      const pats = rot?.patterns ?? []
+      r[key as string] = Array.from({ length: count }, (_, i) => pats[i] ?? [])
     })
     return r
   })
@@ -307,19 +307,19 @@ function RotationTab({ config, onSave }: { config: AppConfig; onSave: (c: AppCon
   const rc = ROT_CONFIGS[activeRot]
 
   const getCell = (patIdx: number, slot: string, facility: string): string => {
-    const pat = patterns[rc.key][patIdx] ?? []
+    const pat = patterns[rc.key as string][patIdx] ?? []
     return pat.find((s) => s.timeSlot === slot && s.facility === facility)?.clubName ?? ''
   }
 
   const setCell = (patIdx: number, slot: string, facility: string, value: string) => {
     setPatterns((prev) => {
-      const pats = prev[rc.key].map((p, i) => {
+      const pats = prev[rc.key as string].map((p, i) => {
         if (i !== patIdx) return p
         const filtered = p.filter((s) => !(s.timeSlot === slot && s.facility === facility))
         if (value) filtered.push({ timeSlot: slot, facility, clubName: value })
         return filtered
       })
-      return { ...prev, [rc.key]: pats }
+      return { ...prev, [rc.key as string]: pats }
     })
   }
 
@@ -327,9 +327,12 @@ function RotationTab({ config, onSave }: { config: AppConfig; onSave: (c: AppCon
     setSaving(true)
     try {
       const newConfig = { ...config }
-      ROT_CONFIGS.forEach(({ key, rotation, patternsKey }) => {
-        const rot = (newConfig[rotation as keyof AppConfig] as Record<string, SlotEntry[][]> | null) ?? { summerPatterns: [], winterPatterns: [], startIndex: 0 }
-        ;(newConfig[rotation as keyof AppConfig] as Record<string, SlotEntry[][]>) = { ...rot, [patternsKey]: patterns[key] }
+      ROT_CONFIGS.forEach(({ key }) => {
+        const existing = newConfig[key] as Rotation | null
+        ;(newConfig as Record<string, unknown>)[key as string] = {
+          ...(existing ?? { startIndex: 0 }),
+          patterns: patterns[key as string],
+        }
       })
       await onSave(newConfig)
       setMsg('保存しました')
@@ -389,25 +392,40 @@ function RotationTab({ config, onSave }: { config: AppConfig; onSave: (c: AppCon
   )
 }
 
+const ROT_INDEX_CONFIGS: { key: keyof AppConfig; label: string }[] = [
+  { key: 'saturdayRotation',       label: '夏季土曜' },
+  { key: 'sundayRotation',         label: '夏季日曜' },
+  { key: 'summerVacationRotation', label: '夏季休暇' },
+  { key: 'winterSaturdayRotation', label: '冬季土曜' },
+  { key: 'winterSundayRotation',   label: '冬季日曜' },
+  { key: 'winterVacationRotation', label: '冬季休暇' },
+]
+
 function StartIndexTab({ config, onSave }: { config: AppConfig; onSave: (c: AppConfig) => Promise<void> }) {
-  const sat = (config.saturdayRotation?.startIndex ?? 0) + 1
-  const sun = (config.sundayRotation?.startIndex ?? 0) + 1
-  const [satStart, setSatStart] = useState(sat)
-  const [sunStart, setSunStart] = useState(sun)
+  const [startIndices, setStartIndices] = useState<Record<string, number>>(() => {
+    const r: Record<string, number> = {}
+    ROT_INDEX_CONFIGS.forEach(({ key }) => {
+      const rot = config[key] as Rotation | null
+      r[key as string] = (rot?.startIndex ?? 0) + 1
+    })
+    return r
+  })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-
-  const satCount = Math.max(config.saturdayRotation?.summerPatterns?.filter(p => p.length > 0).length ?? 3, 1)
-  const sunCount = Math.max(config.sundayRotation?.summerPatterns?.filter(p => p.length > 0).length ?? 3, 1)
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const newConfig: AppConfig = {
-        ...config,
-        saturdayRotation: config.saturdayRotation ? { ...config.saturdayRotation, startIndex: satStart - 1 } : null,
-        sundayRotation: config.sundayRotation ? { ...config.sundayRotation, startIndex: sunStart - 1 } : null,
-      }
+      const newConfig = { ...config }
+      ROT_INDEX_CONFIGS.forEach(({ key }) => {
+        const existing = newConfig[key] as Rotation | null
+        if (existing) {
+          ;(newConfig as Record<string, unknown>)[key as string] = {
+            ...existing,
+            startIndex: startIndices[key as string] - 1,
+          }
+        }
+      })
       await onSave(newConfig)
       setMsg('保存しました')
     } catch { setMsg('保存に失敗しました') }
@@ -418,24 +436,26 @@ function StartIndexTab({ config, onSave }: { config: AppConfig; onSave: (c: AppC
     <div className="space-y-4">
       {msg && <div className="bg-green-100 text-green-800 text-sm px-3 py-2 rounded">{msg}</div>}
       <div className="bg-white border rounded-xl p-4 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">土曜の開始パターン番号</label>
-          <select value={satStart} onChange={(e) => setSatStart(Number(e.target.value))}
-            className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-            {Array.from({ length: satCount }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>パターン {n}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">日曜の開始パターン番号</label>
-          <select value={sunStart} onChange={(e) => setSunStart(Number(e.target.value))}
-            className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-            {Array.from({ length: sunCount }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>パターン {n}</option>
-            ))}
-          </select>
-        </div>
+        {ROT_INDEX_CONFIGS.map(({ key, label }) => {
+          const rot = config[key] as Rotation | null
+          const count = Math.max(rot?.patterns?.filter(p => p.length > 0).length ?? 3, 1)
+          return (
+            <div key={key as string}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {label}の開始パターン番号
+              </label>
+              <select
+                value={startIndices[key as string]}
+                onChange={(e) => setStartIndices(prev => ({ ...prev, [key as string]: Number(e.target.value) }))}
+                className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              >
+                {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>パターン {n}</option>
+                ))}
+              </select>
+            </div>
+          )
+        })}
       </div>
       <button onClick={handleSave} disabled={saving}
         className="w-full bg-blue-600 text-white rounded-lg py-2 font-medium disabled:opacity-50">

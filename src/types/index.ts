@@ -66,11 +66,10 @@ export interface WeekdaySchedule {
   friday:    DayPattern
 }
 
-// ローテーション（夏期・冬期のパターン群）
+// ローテーション（季節ごとに独立したパターン群）
 export interface Rotation {
-  summerPatterns: DayPattern[]  // 5〜10月
-  winterPatterns: DayPattern[]  // 11〜4月
-  startIndex: number            // 今月の開始パターン（0-indexed = パターン番号-1）
+  patterns: DayPattern[]  // スロット一覧（パターン数 × スロット）
+  startIndex: number      // 今月の開始パターン（0-indexed = パターン番号-1）
 }
 
 export interface AppConfig {
@@ -78,9 +77,13 @@ export interface AppConfig {
   holidays: Holiday[]
   schoolEvents: SchoolEvent[]
   adminPin: string
-  weekdaySchedule:  WeekdaySchedule | null
-  saturdayRotation: Rotation | null
-  sundayRotation:   Rotation | null
+  weekdaySchedule:         WeekdaySchedule | null
+  saturdayRotation:        Rotation | null  // 夏季土曜（5〜10月 通常土曜）
+  sundayRotation:          Rotation | null  // 夏季日曜（5〜10月 通常日曜・祝日）
+  summerVacationRotation:  Rotation | null  // 夏季休暇（5〜10月 rotation学校行事）
+  winterSaturdayRotation:  Rotation | null  // 冬季土曜（11〜4月 通常土曜）
+  winterSundayRotation:    Rotation | null  // 冬季日曜（11〜4月 通常日曜・祝日）
+  winterVacationRotation:  Rotation | null  // 冬季休暇（11〜4月 rotation学校行事）
 }
 
 export type DayType = 'weekday' | 'saturday' | 'sunday' | 'holiday' | 'schoolEvent' | 'longBreak'
