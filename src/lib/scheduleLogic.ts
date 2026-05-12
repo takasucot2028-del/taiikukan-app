@@ -29,17 +29,18 @@ export function getDayType(
 }
 
 /** 指定日より前の月内「土曜として扱う」日の連番（0-indexed）を返す
- *  土曜 + rotation学校行事の土曜 をカウント */
+ *  土曜（通常）+ rotation学校行事（曜日不問）をカウント */
 function getNthSaturdayTypeInMonth(dateStr: string, config: AppConfig): number {
   const [year, month, day] = dateStr.split('-').map(Number)
   let count = 0
   for (let d = 1; d < day; d++) {
     const dow = getDay(new Date(year, month - 1, d))
-    if (dow !== 6) continue // 土曜以外はスキップ
     const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const schoolEvent = config.schoolEvents.find((e) => e.date === ds)
-    // 土曜かつ（学校行事なし OR rotation学校行事）→ カウント
-    if (!schoolEvent || schoolEvent.type === 'rotation') count++
+    // rotation学校行事は曜日に関わらず土曜カウント
+    if (schoolEvent?.type === 'rotation') { count++; continue }
+    // 通常の土曜（学校行事なし）
+    if (dow === 6 && !schoolEvent) count++
   }
   return count
 }
@@ -48,8 +49,7 @@ function getNthSaturdayTypeInMonth(dateStr: string, config: AppConfig): number {
  *  以下をカウント：
  *  - 日曜（学校行事なし）
  *  - 祝日（学校行事なし）
- *  - rotation学校行事 の 非土曜日
- *  - rotation学校行事 の 日曜日 */
+ *  ※ rotation学校行事は曜日不問で土曜ローテーション扱いのため除外 */
 function getNthSundayTypeInMonth(dateStr: string, config: AppConfig): number {
   const [year, month, day] = dateStr.split('-').map(Number)
   let count = 0
@@ -59,13 +59,10 @@ function getNthSundayTypeInMonth(dateStr: string, config: AppConfig): number {
     const schoolEvent = config.schoolEvents.find((e) => e.date === ds)
     const isHoliday = config.holidays.some((h) => h.date === ds)
 
-    if (schoolEvent) {
-      // rotation学校行事かつ非土曜 → 日曜ローテーションとしてカウント
-      if (schoolEvent.type === 'rotation' && dow !== 6) count++
-    } else {
-      // 通常の日曜 or 祝日
-      if (dow === 0 || isHoliday) count++
-    }
+    // rotation学校行事は土曜ローテーションへ移行したため日曜カウントしない
+    if (schoolEvent) continue
+    // 通常の日曜 or 祝日
+    if (dow === 0 || isHoliday) count++
   }
   return count
 }
@@ -114,8 +111,8 @@ export function getDaySchedule(
     return slots.map((s) => ({ ...s, timeSlot: s.timeSlot || '16:00〜18:00' }))
   }
 
-  // 土曜ローテーション（通常土曜 + rotation学校行事の土曜）
-  if (type === 'saturday' || (type === 'schoolEvent' && scheduleType === 'rotation' && dow === 6)) {
+  // 土曜ローテーション（通常土曜 + rotation学校行事は曜日不問）
+  if (type === 'saturday' || (type === 'schoolEvent' && scheduleType === 'rotation')) {
     if (!config.saturdayRotation) return []
     const patterns = summer
       ? config.saturdayRotation.summerPatterns
@@ -134,12 +131,11 @@ export function getDaySchedule(
     return result
   }
 
-  // 日曜・祝日・長期休業・学校行事（休日ローテーション・非土曜）
+  // 日曜・祝日・長期休業
   if (
     type === 'sunday' ||
     type === 'holiday' ||
-    type === 'longBreak' ||
-    (type === 'schoolEvent' && scheduleType === 'rotation')
+    type === 'longBreak'
   ) {
     if (!config.sundayRotation) return []
     const patterns = summer
