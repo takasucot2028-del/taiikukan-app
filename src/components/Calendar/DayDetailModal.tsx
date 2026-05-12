@@ -43,7 +43,7 @@ interface Props {
 }
 
 export function DayDetailModal({ date, reservations, schedule, config, onClose, onReservationAdded }: Props) {
-  const { selectedClub } = useAppStore()
+  const { selectedClub, reservations: allReservations, setReservations, setBgSyncing, setSyncError } = useAppStore()
   const [showReservationForm, setShowReservationForm] = useState(false)
   const [showScheduleForm, setShowScheduleForm] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Reservation | null>(null)
@@ -68,41 +68,74 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
   const reservationSlots = reservations.map((r) => r.timeSlot)
   const timeSlots = sortSlots([...new Set([...defaultSlots, ...scheduleSlots, ...reservationSlots])])
 
-  const handleDeleteFixedSlot = async (slot: string, facility: string, clubName: string) => {
-    if (!window.confirm(`「${facility}：${clubName}」を空き枠にしますか？`)) return
-    setBusy(true)
-    try {
-      await gasApi.deleteSlot({ clubName, date, timeSlot: slot, facility, deletedBy: selectedClub })
-      onReservationAdded()
-    } catch {
-      alert('削除に失敗しました。')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleRestoreSlot = async (entry: Reservation) => {
-    setBusy(true)
-    try {
-      await gasApi.restoreSlot(entry.id)
-      onReservationAdded()
-    } catch {
-      alert('元に戻せませんでした。')
-    } finally {
-      setBusy(false)
-    }
-  }
-
+  // 楽観的削除：スケジュールエントリをストアから即座に除去
   const handleDeleteSchedule = async (entry: Reservation) => {
     if (!window.confirm(`「${entry.content}」を削除しますか？`)) return
     setBusy(true)
+    const prev = allReservations
+    setReservations(allReservations.filter(r => r.id !== entry.id))
+    setBgSyncing(true)
     try {
       await gasApi.deleteScheduleEntry(entry.id)
-      onReservationAdded()
     } catch {
-      alert('削除に失敗しました。')
+      setReservations(prev)
+      setSyncError('削除に失敗しました。')
     } finally {
       setBusy(false)
+      setBgSyncing(false)
+    }
+  }
+
+  // 楽観的削除：deleted_slot を除去（スロットを元に戻す）
+  const handleRestoreSlot = async (entry: Reservation) => {
+    setBusy(true)
+    const prev = allReservations
+    setReservations(allReservations.filter(r => r.id !== entry.id))
+    setBgSyncing(true)
+    try {
+      await gasApi.restoreSlot(entry.id)
+    } catch {
+      setReservations(prev)
+      setSyncError('元に戻せませんでした。')
+    } finally {
+      setBusy(false)
+      setBgSyncing(false)
+    }
+  }
+
+  // 楽観的追加：deleted_slot エントリをストアに即座に追加
+  const handleDeleteFixedSlot = async (slot: string, facility: string, clubName: string) => {
+    if (!window.confirm(`「${facility}：${clubName}」を空き枠にしますか？`)) return
+    setBusy(true)
+    const tempId = 'temp_' + Date.now()
+    const tempEntry: Reservation = {
+      id: tempId,
+      clubName,
+      date,
+      timeSlot: slot as Reservation['timeSlot'],
+      facility,
+      content: '',
+      comment: selectedClub,
+      status: '確定',
+      adminMemo: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      entryType: 'deleted_slot',
+    }
+    const prev = allReservations
+    setReservations([...allReservations, tempEntry])
+    setBgSyncing(true)
+    try {
+      const result = await gasApi.deleteSlot({ clubName, date, timeSlot: slot, facility, deletedBy: selectedClub })
+      // 仮IDを正式IDに置換
+      const cur = useAppStore.getState().reservations
+      useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+    } catch {
+      setReservations(prev)
+      setSyncError('削除に失敗しました。')
+    } finally {
+      setBusy(false)
+      setBgSyncing(false)
     }
   }
 
@@ -125,7 +158,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
           date={date}
           entry={editingEntry ?? undefined}
           availableTimeSlots={availableTimeSlots}
-          onSuccess={() => { setShowScheduleForm(false); setEditingEntry(null); onReservationAdded(); onClose() }}
+          onSuccess={() => { setShowScheduleForm(false); setEditingEntry(null); onClose() }}
           onCancel={() => { setShowScheduleForm(false); setEditingEntry(null) }}
         />
       </Modal>
@@ -138,7 +171,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
         <ScheduleEntryForm
           date={date}
           lockedSlot={usingSlot}
-          onSuccess={() => { setUsingSlot(null); onReservationAdded(); onClose() }}
+          onSuccess={() => { setUsingSlot(null); onClose() }}
           onCancel={() => setUsingSlot(null)}
         />
       </Modal>

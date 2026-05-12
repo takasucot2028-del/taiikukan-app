@@ -1,4 +1,5 @@
 import type { AppConfig, Reservation } from '../types'
+import { getCached, setCache, clearCache, clearReservationCaches, CACHE_TTL } from './cache'
 
 const GAS_URL = import.meta.env.VITE_GAS_URL ?? 'YOUR_GAS_WEBAPP_URL'
 
@@ -25,35 +26,65 @@ async function gasPost<T>(action: string, body: Record<string, unknown>): Promis
 }
 
 export const gasApi = {
-  getConfig: () => gasGet<AppConfig>('getConfig'),
+  getConfig: async () => {
+    const cached = getCached<AppConfig>('config', CACHE_TTL.config)
+    if (cached) { console.log('[cache] config hit'); return cached }
+    const data = await gasGet<AppConfig>('getConfig')
+    setCache('config', data)
+    return data
+  },
 
-  getReservations: (year: number, month: number) =>
-    gasGet<Reservation[]>('getReservations', { year: String(year), month: String(month) }),
+  getReservations: async (year: number, month: number) => {
+    const key = `reservations_${year}_${month}`
+    const cached = getCached<Reservation[]>(key, CACHE_TTL.reservations)
+    if (cached) { console.log('[cache] reservations hit', year, month); return cached }
+    const data = await gasGet<Reservation[]>('getReservations', { year: String(year), month: String(month) })
+    setCache(key, data)
+    return data
+  },
 
   /** 占有予約申請（type: reservation） */
-  addReservation: (data: Omit<Reservation, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'adminMemo' | 'entryType'>) =>
-    gasPost<{ success: boolean; id: string }>('addReservation', { ...data, entryType: 'reservation' }),
+  addReservation: async (data: Omit<Reservation, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'adminMemo' | 'entryType'>) => {
+    const result = await gasPost<{ success: boolean; id: string }>('addReservation', { ...data, entryType: 'reservation' })
+    clearReservationCaches()
+    return result
+  },
 
   /** 指導者スケジュール追加（type: schedule） */
-  addScheduleEntry: (data: { clubName: string; date: string; timeSlot: string; facility: string; content: string }) =>
-    gasPost<{ success: boolean; id: string }>('addReservation', { ...data, entryType: 'schedule', comment: '' }),
+  addScheduleEntry: async (data: { clubName: string; date: string; timeSlot: string; facility: string; content: string }) => {
+    const result = await gasPost<{ success: boolean; id: string }>('addReservation', { ...data, entryType: 'schedule', comment: '' })
+    clearReservationCaches()
+    return result
+  },
 
-  updateReservation: (id: string, data: Partial<Reservation>) =>
-    gasPost<{ success: boolean }>('updateReservation', { id, ...data }),
+  updateReservation: async (id: string, data: Partial<Reservation>) => {
+    const result = await gasPost<{ success: boolean }>('updateReservation', { id, ...data })
+    clearReservationCaches()
+    return result
+  },
 
-  updateStatus: (id: string, status: string, adminMemo?: string) =>
-    gasPost<{ success: boolean }>('updateStatus', { id, status, adminMemo }),
+  updateStatus: async (id: string, status: string, adminMemo?: string) => {
+    const result = await gasPost<{ success: boolean }>('updateStatus', { id, status, adminMemo })
+    clearReservationCaches()
+    return result
+  },
 
-  cancelReservation: (id: string) =>
-    gasPost<{ success: boolean }>('updateReservation', { id, status: '取り消し' }),
+  cancelReservation: async (id: string) => {
+    const result = await gasPost<{ success: boolean }>('updateReservation', { id, status: '取り消し' })
+    clearReservationCaches()
+    return result
+  },
 
   /** スケジュールエントリを削除（論理削除） */
-  deleteScheduleEntry: (id: string) =>
-    gasPost<{ success: boolean }>('deleteReservation', { id }),
+  deleteScheduleEntry: async (id: string) => {
+    const result = await gasPost<{ success: boolean }>('deleteReservation', { id })
+    clearReservationCaches()
+    return result
+  },
 
   /** 固定・ローテーション枠を空き枠としてマーク（deleted_slot） */
-  deleteSlot: (data: { clubName: string; date: string; timeSlot: string; facility: string; deletedBy: string }) =>
-    gasPost<{ success: boolean; id: string }>('addReservation', {
+  deleteSlot: async (data: { clubName: string; date: string; timeSlot: string; facility: string; deletedBy: string }) => {
+    const result = await gasPost<{ success: boolean; id: string }>('addReservation', {
       clubName: data.clubName,
       date: data.date,
       timeSlot: data.timeSlot,
@@ -61,15 +92,21 @@ export const gasApi = {
       content: '',
       comment: data.deletedBy,
       entryType: 'deleted_slot',
-    }),
+    })
+    clearReservationCaches()
+    return result
+  },
 
   /** deleted_slot を削除してスロットを元に戻す */
-  restoreSlot: (id: string) =>
-    gasPost<{ success: boolean }>('deleteReservation', { id }),
+  restoreSlot: async (id: string) => {
+    const result = await gasPost<{ success: boolean }>('deleteReservation', { id })
+    clearReservationCaches()
+    return result
+  },
 
   /** 月間予定表を確定する */
-  confirmMonth: (year: number, month: number) =>
-    gasPost<{ success: boolean; id: string }>('addReservation', {
+  confirmMonth: async (year: number, month: number) => {
+    const result = await gasPost<{ success: boolean; id: string }>('addReservation', {
       clubName: '管理者',
       date: `${year}-${String(month).padStart(2, '0')}-01`,
       timeSlot: '',
@@ -77,15 +114,24 @@ export const gasApi = {
       content: `${year}年${month}月`,
       comment: '',
       entryType: 'confirmed_month',
-    }),
+    })
+    clearReservationCaches()
+    return result
+  },
 
   /** 月間確定を取り消す */
-  unconfirmMonth: (id: string) =>
-    gasPost<{ success: boolean }>('deleteReservation', { id }),
+  unconfirmMonth: async (id: string) => {
+    const result = await gasPost<{ success: boolean }>('deleteReservation', { id })
+    clearReservationCaches()
+    return result
+  },
 
   /** 設定を保存する */
-  saveConfig: (config: AppConfig & { satStartIndex?: number; sunStartIndex?: number }) =>
-    gasPost<{ success: boolean }>('saveConfig', { config }),
+  saveConfig: async (config: AppConfig & { satStartIndex?: number; sunStartIndex?: number }) => {
+    const result = await gasPost<{ success: boolean }>('saveConfig', { config })
+    clearCache('config')
+    return result
+  },
 
   /** ログを取得する */
   getLogs: (params?: { year?: string; month?: string }) =>

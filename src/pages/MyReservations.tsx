@@ -17,7 +17,7 @@ const STATUS_CLASS: Record<string, string> = {
 
 export function MyReservations() {
   const navigate = useNavigate()
-  const { selectedClub } = useAppStore()
+  const { selectedClub, reservations: allReservations, setReservations, setBgSyncing, setSyncError } = useAppStore()
   const { reservations, refetch } = useReservations()
   const [editTarget, setEditTarget] = useState<Reservation | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null)
@@ -27,9 +27,20 @@ export function MyReservations() {
 
   const handleCancel = async () => {
     if (!cancelTarget) return
-    await gasApi.cancelReservation(cancelTarget.id)
+    const target = cancelTarget
+    const prev = allReservations
+    // 楽観的更新：即座にストアから除去してモーダルを閉じる
+    setReservations(allReservations.filter(r => r.id !== target.id))
     setCancelTarget(null)
-    refetch()
+    setBgSyncing(true)
+    try {
+      await gasApi.cancelReservation(target.id)
+    } catch {
+      setReservations(prev)
+      setSyncError('取り消しに失敗しました。')
+    } finally {
+      setBgSyncing(false)
+    }
   }
 
   return (

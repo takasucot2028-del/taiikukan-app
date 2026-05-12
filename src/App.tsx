@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store'
+import { SyncIndicator } from './components/common/SyncIndicator'
 import { ClubSelect } from './pages/ClubSelect'
 import { Home } from './pages/Home'
 import { MyReservations } from './pages/MyReservations'
@@ -32,6 +33,7 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <HashRouter>
+      <SyncIndicator />
       <Routes>
         <Route path="/"             element={<RootRedirect />} />
         <Route path="/club-select"  element={<ClubSelect />} />

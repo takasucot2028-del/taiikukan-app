@@ -22,31 +22,67 @@ interface Props {
 }
 
 export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot, onSuccess, onCancel }: Props) {
-  const { selectedClub } = useAppStore()
+  const { selectedClub, reservations: allReservations, setReservations, setBgSyncing, setSyncError } = useAppStore()
   const slots = availableTimeSlots ?? DEFAULT_TIME_SLOTS
 
   const [timeSlot, setTimeSlot] = useState(lockedSlot?.timeSlot ?? entry?.timeSlot ?? slots[0])
   const [facility, setFacility] = useState(lockedSlot?.facility ?? entry?.facility ?? ALL_FACILITIES[0])
   const [content, setContent] = useState(entry?.content ?? '')
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!content.trim()) { setError('活動内容を入力してください'); return }
-    setSubmitting(true)
     setError('')
-    try {
-      if (entry) {
-        await gasApi.updateReservation(entry.id, { timeSlot, facility, content })
-      } else {
-        await gasApi.addScheduleEntry({ clubName: selectedClub, date, timeSlot, facility, content })
-      }
+
+    if (entry) {
+      // 編集：楽観的更新してすぐにフォームを閉じる
+      const prev = allReservations
+      setReservations(allReservations.map(r =>
+        r.id === entry.id ? { ...r, timeSlot: timeSlot as Reservation['timeSlot'], facility, content } : r
+      ))
       onSuccess()
-    } catch {
-      setError('送信に失敗しました。もう一度お試しください。')
-    } finally {
-      setSubmitting(false)
+      setBgSyncing(true)
+      try {
+        await gasApi.updateReservation(entry.id, { timeSlot, facility, content })
+      } catch {
+        setReservations(prev)
+        setSyncError('更新に失敗しました。')
+      } finally {
+        setBgSyncing(false)
+      }
+    } else {
+      // 新規追加：仮エントリをストアに追加してすぐに閉じる
+      const tempId = 'temp_' + Date.now()
+      const tempEntry: Reservation = {
+        id: tempId,
+        clubName: selectedClub,
+        date,
+        timeSlot: timeSlot as Reservation['timeSlot'],
+        facility,
+        content,
+        comment: '',
+        status: '確定',
+        adminMemo: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        entryType: 'schedule',
+      }
+      setReservations([...allReservations, tempEntry])
+      onSuccess()
+      setBgSyncing(true)
+      try {
+        const result = await gasApi.addScheduleEntry({ clubName: selectedClub, date, timeSlot, facility, content })
+        // 仮IDを正式IDに置換（アンマウント後もストアから直接操作）
+        const cur = useAppStore.getState().reservations
+        useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+      } catch {
+        const cur = useAppStore.getState().reservations
+        useAppStore.getState().setReservations(cur.filter(r => r.id !== tempId))
+        setSyncError('追加に失敗しました。')
+      } finally {
+        setBgSyncing(false)
+      }
     }
   }
 
@@ -114,10 +150,9 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
         </button>
         <button
           type="submit"
-          disabled={submitting}
-          className="flex-1 bg-green-600 text-white rounded-lg py-3 font-medium disabled:opacity-50"
+          className="flex-1 bg-green-600 text-white rounded-lg py-3 font-medium"
         >
-          {submitting ? '送信中...' : entry ? '更新する' : '追加する'}
+          {entry ? '更新する' : '追加する'}
         </button>
       </div>
     </form>

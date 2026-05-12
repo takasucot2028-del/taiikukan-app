@@ -18,6 +18,12 @@ interface AppState {
 
   isAdminAuthenticated: boolean
   setAdminAuthenticated: (v: boolean) => void
+
+  bgSyncing: boolean
+  setBgSyncing: (v: boolean) => void
+
+  syncError: string | null
+  setSyncError: (msg: string | null) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -38,6 +44,12 @@ export const useAppStore = create<AppState>()(
 
       isAdminAuthenticated: false,
       setAdminAuthenticated: (v) => set({ isAdminAuthenticated: v }),
+
+      bgSyncing: false,
+      setBgSyncing: (v) => set({ bgSyncing: v }),
+
+      syncError: null,
+      setSyncError: (msg) => set({ syncError: msg }),
     }),
     {
       name: 'taiikukan-app-storage',

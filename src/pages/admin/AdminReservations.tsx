@@ -43,8 +43,8 @@ export function AdminReservations() {
   const navigate = useNavigate()
   const configResult = useConfig()
   const config = configResult?.config
-  const { currentYear, currentMonth } = useAppStore()
-  const { reservations: allReservations, refetch } = useReservations()
+  const { currentYear, currentMonth, reservations: allReservations, setReservations, setBgSyncing, setSyncError } = useAppStore()
+  const { refetch } = useReservations()
 
   // 占有申請のみ表示（schedule/deleted_slot/confirmed_monthは除外）
   const reservations = useMemo(() => {
@@ -69,13 +69,19 @@ export function AdminReservations() {
 
   const handleStatus = async (id: string, status: ReservationStatus) => {
     setSaving(true)
+    // 楽観的更新：ステータスを即座にストアに反映
+    const prev = allReservations
+    setReservations(allReservations.map(r => r.id === id ? { ...r, status } : r))
+    setBgSyncing(true)
     try {
       await gasApi.updateStatus(id, status)
-      refetch()
     } catch (e) {
       console.error('[AdminReservations] ステータス更新エラー:', e)
+      setReservations(prev)
+      setSyncError('ステータスの更新に失敗しました。')
     } finally {
       setSaving(false)
+      setBgSyncing(false)
     }
   }
 
