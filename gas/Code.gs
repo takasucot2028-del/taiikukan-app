@@ -16,9 +16,9 @@ var FACILITY_NAMES = [
   '総合体育館 半面B',  // I列 (idx 8)
 ];
 
-// 設定シートの行番号
+// 設定シートの行番号（debugSheetRowsで実測済み）
 var SCHEDULE_ROWS = {
-  weekday:            { start: 5,   end: 9   }, // 月〜金（5行目〜9行目）
+  weekday:            { start: 5,   end: 9   }, // 月〜金（行5-9）
   summerSatRotation:  { start: 13,  count: 9  }, // 夏季土曜 3パターン×3スロット（行13-21）
   summerSunRotation:  { start: 25,  count: 9  }, // 夏季日曜 3パターン×3スロット（行25-33）
   winterSatRotation:  { start: 37,  count: 9  }, // 冬季土曜 6パターン×3スロット（行37-54）
@@ -26,9 +26,8 @@ var SCHEDULE_ROWS = {
   summerVacRotation:  { start: 80,  count: 9  }, // 夏季休暇 3パターン×3スロット（行80-88）
   winterVacRotation:  { start: 92,  count: 9  }, // 冬季休暇 3パターン×3スロット（行92-100）
   clubs:              { start: 104, count: 10  }, // クラブ一覧（行104-113）
-  holidays:           { start: 116, end: 135  }, // 祝日（行116-135）
-  schoolEvents:       { start: 138, end: 260  }, // 学校行事（行138-260）
-  adminPinRow:        189, // 管理者PIN（+23シフト推定、debugSheetRowsで要確認）
+  holidays:           { start: 117, end: 134  }, // 祝日データ（行117-134）
+  schoolEvents:       { start: 139, end: 280  }, // 学校行事データ（行139-280）
 };
 
 // CORS対応レスポンス
@@ -122,13 +121,13 @@ function getConfig() {
     if (d && n) schoolEvents.push({ date: formatDate_(d), name: n, type: (t === 'rotation' ? 'rotation' : 'weekday') });
   }
 
-  // ---- 管理者PIN ----
+  // ---- 管理者PIN（ラベルスキャン：行番号固定不要） ----
   var adminPin = '1234';
-  var pinLabelIdx = SCHEDULE_ROWS.adminPinRow - 1;
-  if (lastRow > SCHEDULE_ROWS.adminPinRow) {
-    var label = String(data[pinLabelIdx][0]).trim();
-    var pin   = String(data[pinLabelIdx + 1][0]).trim();
-    if (label === '管理者PIN' && pin) adminPin = pin;
+  for (var r = 0; r < data.length - 1; r++) {
+    if (String(data[r][0]).trim() === '管理者PIN') {
+      var pin = String(data[r + 1][0]).trim();
+      if (pin) { adminPin = pin; break; }
+    }
   }
 
   // ---- 平日固定スケジュール ----
@@ -730,6 +729,16 @@ function debugSheetRows() {
   data.forEach(function(row, i) {
     if (row[0] || row[1]) {
       Logger.log((100 + i) + ': ' + row[0] + ' | ' + row[1]);
+    }
+  });
+}
+
+function debugAdminPin() {
+  var sheet = SS.getSheetByName('設定');
+  var data = sheet.getRange(240, 1, 60, 2).getValues();
+  data.forEach(function(row, i) {
+    if (row[0] || row[1]) {
+      Logger.log((240 + i) + ': ' + row[0] + ' | ' + row[1]);
     }
   });
 }
