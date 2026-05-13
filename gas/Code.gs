@@ -452,25 +452,43 @@ function saveConfig(config) {
     }
   }
 
+  // 空パターンはスキップ（スプレッドシートの既存データを保護）
+  function writeRotationSafe(patterns, startRow, count) {
+    if (!patterns || patterns.length === 0) return;
+    var hasData = patterns.some(function(pat) { return pat && pat.length > 0; });
+    if (!hasData) return;
+    writeRotation(patterns, startRow, count);
+  }
+
+  // 夏季土曜（行13-21）: フロントは patterns で送信、旧形式 summerPatterns にも対応
   if (config.saturdayRotation) {
-    writeRotation(config.saturdayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSatRotation.start, 3);
-    writeRotation(config.saturdayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSatRotation.start, 3);
+    var satSumPats = config.saturdayRotation.patterns || config.saturdayRotation.summerPatterns;
+    writeRotationSafe(satSumPats, SCHEDULE_ROWS.summerSatRotation.start, 3);
   }
+  // 夏季日曜（行25-33）: 同上
   if (config.sundayRotation) {
-    writeRotation(config.sundayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSunRotation.start, 3);
-    writeRotation(config.sundayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSunRotation.start, 3);
+    var sunSumPats = config.sundayRotation.patterns || config.sundayRotation.summerPatterns;
+    writeRotationSafe(sunSumPats, SCHEDULE_ROWS.summerSunRotation.start, 3);
   }
+  // 冬季土曜（行37-54）: winterSaturdayRotation.patterns 優先
   if (config.winterSaturdayRotation) {
-    writeRotation(config.winterSaturdayRotation.patterns || [], SCHEDULE_ROWS.winterSatRotation.start, 6);
+    writeRotationSafe(config.winterSaturdayRotation.patterns, SCHEDULE_ROWS.winterSatRotation.start, 6);
+  } else if (config.saturdayRotation && config.saturdayRotation.winterPatterns) {
+    writeRotationSafe(config.saturdayRotation.winterPatterns, SCHEDULE_ROWS.winterSatRotation.start, 3);
   }
+  // 冬季日曜（行58-75）: winterSundayRotation.patterns 優先
   if (config.winterSundayRotation) {
-    writeRotation(config.winterSundayRotation.patterns || [], SCHEDULE_ROWS.winterSunRotation.start, 6);
+    writeRotationSafe(config.winterSundayRotation.patterns, SCHEDULE_ROWS.winterSunRotation.start, 6);
+  } else if (config.sundayRotation && config.sundayRotation.winterPatterns) {
+    writeRotationSafe(config.sundayRotation.winterPatterns, SCHEDULE_ROWS.winterSunRotation.start, 3);
   }
+  // 夏季休暇（行80-88）
   if (config.summerVacationRotation) {
-    writeRotation(config.summerVacationRotation.patterns || [], SCHEDULE_ROWS.summerVacRotation.start, 3);
+    writeRotationSafe(config.summerVacationRotation.patterns, SCHEDULE_ROWS.summerVacRotation.start, 3);
   }
+  // 冬季休暇（行92-100）
   if (config.winterVacationRotation) {
-    writeRotation(config.winterVacationRotation.patterns || [], SCHEDULE_ROWS.winterVacRotation.start, 3);
+    writeRotationSafe(config.winterVacationRotation.patterns, SCHEDULE_ROWS.winterVacRotation.start, 3);
   }
 
   // ローテーション開始番号（1〜12行目を検索して更新）
