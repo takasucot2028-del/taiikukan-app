@@ -16,16 +16,18 @@ var FACILITY_NAMES = [
   '総合体育館 半面B',  // I列 (idx 8)
 ];
 
-// 設定シートの行番号（debugScanScheduleRowsで確認済み）
+// 設定シートの行番号
 var SCHEDULE_ROWS = {
-  weekday:            { start: 5,  end: 9  }, // 月〜金（5行目〜9行目）
-  summerSaturday:     { start: 13, end: 21 }, // 夏期土曜 3パターン×3スロット
-  summerSunday:       { start: 25, end: 33 }, // 夏期日曜 3パターン×3スロット
-  winterSaturday:     { start: 37, end: 54 }, // 冬期土曜 6パターン×3スロット（現在空）
-  winterSunday:       { start: 58, end: 75 }, // 冬期日曜 6パターン×3スロット（現在空）
-  clubs:              { start: 80, end: 89 },
-  holidays:           { start: 93, end: 110 },
-  schoolEvents:       { start: 115, end: 220 },
+  weekday:            { start: 5,   end: 9   }, // 月〜金（5行目〜9行目）
+  summerSatRotation:  { start: 13,  count: 9  }, // 夏季土曜 3パターン×3スロット（行13-21）
+  summerSunRotation:  { start: 25,  count: 9  }, // 夏季日曜 3パターン×3スロット（行25-33）
+  winterSatRotation:  { start: 37,  count: 9  }, // 冬季土曜 6パターン×3スロット（行37-54）
+  winterSunRotation:  { start: 58,  count: 9  }, // 冬季日曜 6パターン×3スロット（行58-75）
+  summerVacRotation:  { start: 80,  count: 9  }, // 夏季休暇 3パターン×3スロット（行80-88）
+  winterVacRotation:  { start: 92,  count: 9  }, // 冬季休暇 3パターン×3スロット（行92-100）
+  clubs:              { start: 80,  end: 89   },
+  holidays:           { start: 93,  end: 110  },
+  schoolEvents:       { start: 115, end: 220  },
   adminPinRow:        166,
 };
 
@@ -89,7 +91,9 @@ function doPost(e) {
 function getConfig() {
   var sheet = SS.getSheetByName('設定');
   if (!sheet) return { clubs: [], holidays: [], schoolEvents: [], adminPin: '1234',
-    weekdaySchedule: null, saturdayRotation: null, sundayRotation: null };
+    weekdaySchedule: null, saturdayRotation: null, sundayRotation: null,
+    summerVacationRotation: null, winterVacationRotation: null,
+    winterSaturdayRotation: null, winterSundayRotation: null };
 
   var lastRow = sheet.getLastRow();
   var lastCol = Math.max(sheet.getLastColumn(), 9);
@@ -129,25 +133,26 @@ function getConfig() {
   // ---- 平日固定スケジュール ----
   var weekdaySchedule = readWeekdaySchedule_(data);
 
-  // ---- ローテーション（夏期・冬期） ----
-  var summerSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.summerSaturday.start, 3);
-  var summerSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.summerSunday.start,   3);
-  var winterSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSaturday.start, 3);
-  var winterSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSunday.start,   3);
+  // ---- ローテーション（夏季・冬季・休暇） ----
+  var summerSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.summerSatRotation.start, 3);
+  var summerSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.summerSunRotation.start, 3);
+  var winterSatPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSatRotation.start, 6);
+  var winterSunPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterSunRotation.start, 6);
+  var summerVacPats = readRotationPatterns_(data, SCHEDULE_ROWS.summerVacRotation.start, 3);
+  var winterVacPats = readRotationPatterns_(data, SCHEDULE_ROWS.winterVacRotation.start, 3);
 
-  // ローテーション開始番号（A列に「土曜開始番号」「日曜開始番号」ラベルがある行を探す）
-  var satStart = 0; // デフォルト：パターン①（0-indexed）
-  var sunStart = 0;
+  // ローテーション開始番号（A列にラベルがある行を探す）
+  var satStart = 0, sunStart = 0, sumVacStart = 0, winSatStart = 0, winSunStart = 0, winVacStart = 0;
   for (var r = 1; r <= Math.min(12, lastRow); r++) {
     var lbl = String(data[r - 1][0]).trim();
-    if (lbl === '土曜開始番号' || lbl === '土曜ローテーション開始') {
-      var v = parseInt(data[r - 1][1]);
-      if (!isNaN(v) && v >= 1) satStart = v - 1; // 1-indexed → 0-indexed
-    }
-    if (lbl === '日曜開始番号' || lbl === '日曜ローテーション開始') {
-      var v = parseInt(data[r - 1][1]);
-      if (!isNaN(v) && v >= 1) sunStart = v - 1;
-    }
+    var v   = parseInt(data[r - 1][1]);
+    var n   = (!isNaN(v) && v >= 1) ? v - 1 : -1;
+    if (lbl === '土曜開始番号'     || lbl === '土曜ローテーション開始')    { if (n >= 0) satStart    = n; }
+    if (lbl === '日曜開始番号'     || lbl === '日曜ローテーション開始')    { if (n >= 0) sunStart    = n; }
+    if (lbl === '夏季休暇開始番号' || lbl === '夏季休暇ローテーション開始') { if (n >= 0) sumVacStart = n; }
+    if (lbl === '冬季土曜開始番号' || lbl === '冬季土曜ローテーション開始') { if (n >= 0) winSatStart = n; }
+    if (lbl === '冬季日曜開始番号' || lbl === '冬季日曜ローテーション開始') { if (n >= 0) winSunStart = n; }
+    if (lbl === '冬季休暇開始番号' || lbl === '冬季休暇ローテーション開始') { if (n >= 0) winVacStart = n; }
   }
 
   return {
@@ -159,14 +164,37 @@ function getConfig() {
     saturdayRotation: {
       summerPatterns: summerSatPats,
       winterPatterns: winterSatPats,
-      startIndex: satStart,
+      startIndex:     satStart,
     },
     sundayRotation: {
       summerPatterns: summerSunPats,
       winterPatterns: winterSunPats,
-      startIndex: sunStart,
+      startIndex:     sunStart,
     },
-    rotationStartNumbers: { saturday: satStart + 1, sunday: sunStart + 1 },
+    summerVacationRotation: {
+      patterns:   summerVacPats,
+      startIndex: sumVacStart,
+    },
+    winterVacationRotation: {
+      patterns:   winterVacPats,
+      startIndex: winVacStart,
+    },
+    winterSaturdayRotation: {
+      patterns:   winterSatPats,
+      startIndex: winSatStart,
+    },
+    winterSundayRotation: {
+      patterns:   winterSunPats,
+      startIndex: winSunStart,
+    },
+    rotationStartNumbers: {
+      saturday:       satStart    + 1,
+      sunday:         sunStart    + 1,
+      summerVacation: sumVacStart + 1,
+      winterSaturday: winSatStart + 1,
+      winterSunday:   winSunStart + 1,
+      winterVacation: winVacStart + 1,
+    },
   };
 }
 
@@ -425,24 +453,36 @@ function saveConfig(config) {
   }
 
   if (config.saturdayRotation) {
-    writeRotation(config.saturdayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSaturday.start, 3);
-    writeRotation(config.saturdayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSaturday.start, 3);
+    writeRotation(config.saturdayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSatRotation.start, 3);
+    writeRotation(config.saturdayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSatRotation.start, 3);
   }
   if (config.sundayRotation) {
-    writeRotation(config.sundayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSunday.start, 3);
-    writeRotation(config.sundayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSunday.start, 3);
+    writeRotation(config.sundayRotation.summerPatterns || [], SCHEDULE_ROWS.summerSunRotation.start, 3);
+    writeRotation(config.sundayRotation.winterPatterns || [], SCHEDULE_ROWS.winterSunRotation.start, 3);
+  }
+  if (config.winterSaturdayRotation) {
+    writeRotation(config.winterSaturdayRotation.patterns || [], SCHEDULE_ROWS.winterSatRotation.start, 6);
+  }
+  if (config.winterSundayRotation) {
+    writeRotation(config.winterSundayRotation.patterns || [], SCHEDULE_ROWS.winterSunRotation.start, 6);
+  }
+  if (config.summerVacationRotation) {
+    writeRotation(config.summerVacationRotation.patterns || [], SCHEDULE_ROWS.summerVacRotation.start, 3);
+  }
+  if (config.winterVacationRotation) {
+    writeRotation(config.winterVacationRotation.patterns || [], SCHEDULE_ROWS.winterVacRotation.start, 3);
   }
 
   // ローテーション開始番号（1〜12行目を検索して更新）
   var lastRow12 = sheet.getRange(1, 1, 12, 2).getValues();
   for (var r = 0; r < 12; r++) {
     var lbl = String(lastRow12[r][0]).trim();
-    if ((lbl === '土曜開始番号' || lbl === '土曜ローテーション開始') && config.saturdayRotation) {
-      sheet.getRange(r + 1, 2).setValue((config.saturdayRotation.startIndex || 0) + 1);
-    }
-    if ((lbl === '日曜開始番号' || lbl === '日曜ローテーション開始') && config.sundayRotation) {
-      sheet.getRange(r + 1, 2).setValue((config.sundayRotation.startIndex || 0) + 1);
-    }
+    if ((lbl === '土曜開始番号'     || lbl === '土曜ローテーション開始')    && config.saturdayRotation)       { sheet.getRange(r+1,2).setValue((config.saturdayRotation.startIndex       || 0) + 1); }
+    if ((lbl === '日曜開始番号'     || lbl === '日曜ローテーション開始')    && config.sundayRotation)         { sheet.getRange(r+1,2).setValue((config.sundayRotation.startIndex         || 0) + 1); }
+    if ((lbl === '夏季休暇開始番号' || lbl === '夏季休暇ローテーション開始') && config.summerVacationRotation) { sheet.getRange(r+1,2).setValue((config.summerVacationRotation.startIndex  || 0) + 1); }
+    if ((lbl === '冬季土曜開始番号' || lbl === '冬季土曜ローテーション開始') && config.winterSaturdayRotation) { sheet.getRange(r+1,2).setValue((config.winterSaturdayRotation.startIndex  || 0) + 1); }
+    if ((lbl === '冬季日曜開始番号' || lbl === '冬季日曜ローテーション開始') && config.winterSundayRotation)   { sheet.getRange(r+1,2).setValue((config.winterSundayRotation.startIndex    || 0) + 1); }
+    if ((lbl === '冬季休暇開始番号' || lbl === '冬季休暇ローテーション開始') && config.winterVacationRotation) { sheet.getRange(r+1,2).setValue((config.winterVacationRotation.startIndex  || 0) + 1); }
   }
 
   writeLog_('saveConfig', '管理者', '設定を保存しました');
@@ -663,7 +703,22 @@ function testGetConfig() {
   Logger.log('祝日数: ' + result.holidays.length);
   Logger.log('学校行事数: ' + result.schoolEvents.length);
   Logger.log('平日月曜スロット数: ' + (result.weekdaySchedule ? result.weekdaySchedule.monday.length : 0));
-  Logger.log('夏期土曜パターン数: ' + (result.saturdayRotation ? result.saturdayRotation.summerPatterns.length : 0));
-  Logger.log('夏期土曜①スロット数: ' + (result.saturdayRotation && result.saturdayRotation.summerPatterns[0] ? result.saturdayRotation.summerPatterns[0].length : 0));
-  Logger.log(JSON.stringify(result.saturdayRotation && result.saturdayRotation.summerPatterns[0]));
+  Logger.log('夏季土曜パターン数: ' + (result.saturdayRotation ? result.saturdayRotation.summerPatterns.length : 0));
+  Logger.log('冬季土曜パターン数: ' + (result.saturdayRotation ? result.saturdayRotation.winterPatterns.length : 0));
+  Logger.log('夏季休暇パターン数: ' + (result.summerVacationRotation ? result.summerVacationRotation.patterns.length : 0));
+  Logger.log('冬季休暇パターン数: ' + (result.winterVacationRotation ? result.winterVacationRotation.patterns.length : 0));
+  Logger.log('rotationStartNumbers: ' + JSON.stringify(result.rotationStartNumbers));
+}
+
+function debugRotationRows() {
+  var sheet = SS.getSheetByName('設定');
+  [[80,'夏季休暇'],[92,'冬季休暇']].forEach(function(item) {
+    var data = sheet.getRange(item[0], 1, 9, 9).getValues();
+    Logger.log(item[1] + ':');
+    data.forEach(function(row, i) {
+      if (row.some(function(v){ return v; })) {
+        Logger.log('  行' + (item[0]+i) + ': ' + row.join(' | '));
+      }
+    });
+  });
 }
