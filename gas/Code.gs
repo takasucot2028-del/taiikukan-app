@@ -25,10 +25,10 @@ var SCHEDULE_ROWS = {
   winterSunRotation:  { start: 58,  count: 9  }, // 冬季日曜 6パターン×3スロット（行58-75）
   summerVacRotation:  { start: 80,  count: 9  }, // 夏季休暇 3パターン×3スロット（行80-88）
   winterVacRotation:  { start: 92,  count: 9  }, // 冬季休暇 3パターン×3スロット（行92-100）
-  clubs:              { start: 80,  end: 89   },
-  holidays:           { start: 93,  end: 110  },
-  schoolEvents:       { start: 115, end: 220  },
-  adminPinRow:        166,
+  clubs:              { start: 104, count: 10  }, // クラブ一覧（行104-113）
+  holidays:           { start: 116, end: 135  }, // 祝日（行116-135）
+  schoolEvents:       { start: 138, end: 260  }, // 学校行事（行138-260）
+  adminPinRow:        189, // 管理者PIN（+23シフト推定、debugSheetRowsで要確認）
 };
 
 // CORS対応レスポンス
@@ -101,7 +101,8 @@ function getConfig() {
 
   // ---- クラブ一覧 ----
   var clubs = [];
-  for (var r = SCHEDULE_ROWS.clubs.start; r <= Math.min(SCHEDULE_ROWS.clubs.end, lastRow); r++) {
+  var clubsEnd = SCHEDULE_ROWS.clubs.end || (SCHEDULE_ROWS.clubs.start + SCHEDULE_ROWS.clubs.count - 1);
+  for (var r = SCHEDULE_ROWS.clubs.start; r <= Math.min(clubsEnd, lastRow); r++) {
     var name = String(data[r - 1][0]).trim();
     if (name) clubs.push({ id: String(r), name: name });
   }
@@ -393,7 +394,7 @@ function saveConfig(config) {
   if (!sheet) return { success: false, error: '設定シートが見つかりません' };
 
   // クラブ一覧
-  var clubRange = SCHEDULE_ROWS.clubs.end - SCHEDULE_ROWS.clubs.start + 1;
+  var clubRange = SCHEDULE_ROWS.clubs.count || (SCHEDULE_ROWS.clubs.end - SCHEDULE_ROWS.clubs.start + 1);
   sheet.getRange(SCHEDULE_ROWS.clubs.start, 1, clubRange, 1).clearContent();
   (config.clubs || []).forEach(function(c, i) {
     if (i < clubRange) sheet.getRange(SCHEDULE_ROWS.clubs.start + i, 1).setValue(c.name);
@@ -720,5 +721,15 @@ function debugRotationRows() {
         Logger.log('  行' + (item[0]+i) + ': ' + row.join(' | '));
       }
     });
+  });
+}
+
+function debugSheetRows() {
+  var sheet = SS.getSheetByName('設定');
+  var data = sheet.getRange(100, 1, 160, 2).getValues();
+  data.forEach(function(row, i) {
+    if (row[0] || row[1]) {
+      Logger.log((100 + i) + ': ' + row[0] + ' | ' + row[1]);
+    }
   });
 }
