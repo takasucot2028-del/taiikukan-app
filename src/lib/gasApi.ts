@@ -71,8 +71,11 @@ async function gasPost<T>(action: string, body: Record<string, unknown>): Promis
 
 export const gasApi = {
   getConfig: async () => {
-    const cached = getCached<AppConfig>('config', CACHE_TTL.config)
-    if (cached) { console.log('[cache] config hit'); return cached }
+    const isAdmin = window.location.hash.includes('/admin')
+    if (!isAdmin) {
+      const cached = getCached<AppConfig>('config', CACHE_TTL.config)
+      if (cached) { console.log('[cache] config hit'); return cached }
+    }
     const raw = await gasGet<Record<string, unknown>>('getConfig')
     const data = normalizeConfig(raw)
     setCache('config', data)

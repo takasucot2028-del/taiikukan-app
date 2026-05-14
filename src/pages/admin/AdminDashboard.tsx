@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store'
 import { useReservations } from '../../hooks/useReservations'
+import { clearCache } from '../../lib/cache'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { AdminNav } from '../../components/admin/AdminNav'
@@ -28,6 +30,14 @@ export function AdminDashboard() {
   const deadline = new Date(currentYear, currentMonth - 1 + 1, 20)
   const today = new Date()
   const daysLeft = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+  const [cacheCleared, setCacheCleared] = useState(false)
+
+  const handleClearCache = () => {
+    clearCache()
+    setCacheCleared(true)
+    setTimeout(() => setCacheCleared(false), 3000)
+  }
 
   const handleLogout = () => {
     setAdminAuthenticated(false)
@@ -92,6 +102,21 @@ export function AdminDashboard() {
               </div>
             </button>
           ))}
+        </div>
+
+        <div className="bg-white border rounded-xl p-4 space-y-2">
+          <h2 className="text-sm font-semibold text-gray-600">データ管理</h2>
+          <p className="text-xs text-gray-400">スプレッドシートを直接編集した場合は、キャッシュをクリアして最新データを取得してください。</p>
+          <button
+            onClick={handleClearCache}
+            className={`w-full rounded-lg py-2.5 text-sm font-medium transition-colors ${
+              cacheCleared
+                ? 'bg-green-100 text-green-800 border border-green-200'
+                : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
+            }`}
+          >
+            {cacheCleared ? '最新データを取得しました' : 'キャッシュをクリア'}
+          </button>
         </div>
       </main>
     </div>

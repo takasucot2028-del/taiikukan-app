@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAppStore } from '../../store'
 import { gasApi } from '../../lib/gasApi'
+import { useConfig } from '../../hooks/useReservations'
 import { AdminNav } from '../../components/admin/AdminNav'
 import type { AppConfig, Rotation, Club, Holiday, SchoolEvent, SlotEntry } from '../../types'
 
@@ -289,13 +290,14 @@ function WeekdayScheduleTab({ config, onSave }: { config: AppConfig; onSave: (c:
 
 // 1種類のローテーション編集カード（個別保存）
 function RotationCard({
-  rotKey, label, count, config, onSaved,
+  rotKey, label, count, config, onSaved, refetch,
 }: {
   rotKey: keyof AppConfig
   label: string
   count: number
   config: AppConfig
   onSaved: (key: keyof AppConfig, patterns: SlotEntry[][]) => void
+  refetch: () => Promise<void>
 }) {
   const clubs = config.clubs.map((c) => c.name)
   const rot = config[rotKey] as Rotation | null
@@ -324,6 +326,7 @@ function RotationCard({
     try {
       await gasApi.saveRotation(rotKey as string, localPats)
       onSaved(rotKey, localPats)
+      await refetch()
       setMsg('保存しました')
     } catch {
       setMsg('保存に失敗しました')
@@ -392,7 +395,7 @@ function RotationCard({
   )
 }
 
-function RotationTab({ config }: { config: AppConfig }) {
+function RotationTab({ config, refetch }: { config: AppConfig; refetch: () => Promise<void> }) {
   const { setConfig } = useAppStore()
   const [localConfig, setLocalConfig] = useState(config)
 
@@ -416,6 +419,7 @@ function RotationTab({ config }: { config: AppConfig }) {
           count={rc.count}
           config={localConfig}
           onSaved={handleSaved}
+          refetch={refetch}
         />
       ))}
     </div>
@@ -496,7 +500,8 @@ function StartIndexTab({ config, onSave }: { config: AppConfig; onSave: (c: AppC
 }
 
 export function AdminSettings() {
-  const { config, setConfig } = useAppStore()
+  const { setConfig } = useAppStore()
+  const { config, refetch } = useConfig()
   const [activeTab, setActiveTab] = useState<Tab>('クラブ')
 
   const handleSave = useCallback(async (newConfig: AppConfig) => {
@@ -532,7 +537,7 @@ export function AdminSettings() {
         {activeTab === '祝日' && <HolidayTab config={config} onSave={handleSave} />}
         {activeTab === '学校行事' && <SchoolEventTab config={config} onSave={handleSave} />}
         {activeTab === '平日スケジュール' && <WeekdayScheduleTab config={config} onSave={handleSave} />}
-        {activeTab === 'ローテーション' && <RotationTab config={config} />}
+        {activeTab === 'ローテーション' && <RotationTab config={config} refetch={refetch} />}
         {activeTab === '開始番号' && <StartIndexTab config={config} onSave={handleSave} />}
       </main>
     </div>

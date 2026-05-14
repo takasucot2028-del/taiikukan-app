@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { gasApi } from '../lib/gasApi'
 import { useAppStore } from '../store'
+import { clearCache } from '../lib/cache'
 
 export function useReservations() {
   const { currentYear, currentMonth, setReservations, reservations } = useAppStore()
@@ -27,31 +28,40 @@ export function useConfig() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (config) return
+  const fetchFromGas = useCallback(async () => {
     setLoading(true)
     setError(null)
-    gasApi.getConfig()
-      .then((data) => {
-        console.log('[useConfig] GASレスポンス:', JSON.stringify(data).slice(0, 500))
-        if (!data || !Array.isArray(data.clubs)) {
-          setError(`GASから不正なデータ: ${JSON.stringify(data).slice(0, 200)}`)
-          return
-        }
-        if (data.clubs.length === 0) {
-          setError(`クラブ一覧が空です。スプレッドシートの行番号設定を確認してください。GASレスポンス: ${JSON.stringify(data).slice(0, 200)}`)
-          return
-        }
-        console.log('[useConfig] クラブ数:', data.clubs.length, '/ 祝日数:', data.holidays.length, '/ 行事数:', data.schoolEvents.length)
-        setConfig(data)
-      })
-      .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e)
-        setError(`GAS接続エラー: ${msg}`)
-        console.error('[useConfig] エラー:', e)
-      })
-      .finally(() => setLoading(false))
-  }, [config, setConfig])
+    try {
+      const data = await gasApi.getConfig()
+      console.log('[useConfig] GASレスポンス:', JSON.stringify(data).slice(0, 500))
+      if (!data || !Array.isArray(data.clubs)) {
+        setError(`GASから不正なデータ: ${JSON.stringify(data).slice(0, 200)}`)
+        return
+      }
+      if (data.clubs.length === 0) {
+        setError(`クラブ一覧が空です。スプレッドシートの行番号設定を確認してください。GASレスポンス: ${JSON.stringify(data).slice(0, 200)}`)
+        return
+      }
+      console.log('[useConfig] クラブ数:', data.clubs.length, '/ 祝日数:', data.holidays.length, '/ 行事数:', data.schoolEvents.length)
+      setConfig(data)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(`GAS接続エラー: ${msg}`)
+      console.error('[useConfig] エラー:', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [setConfig])
 
-  return { config, error, loading }
+  useEffect(() => {
+    if (config) return
+    fetchFromGas()
+  }, [config, fetchFromGas])
+
+  const refetch = useCallback(async () => {
+    clearCache('config')
+    await fetchFromGas()
+  }, [fetchFromGas])
+
+  return { config, error, loading, refetch }
 }
