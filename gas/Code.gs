@@ -276,20 +276,21 @@ function getReservations(year, month) {
   }
 
   var C = {
-    id:        colIdx(['申請ID'],                     0),
-    createdAt: colIdx(['申請日時'],                   1),
-    clubName:  colIdx(['クラブ名', '申請者（クラブ）'], 2),
-    date:      colIdx(['対象日'],                     3),
-    timeSlot:  colIdx(['時間帯'],                     4),
-    facility:  colIdx(['占有施設'],                   5),
-    content:   colIdx(['占有内容'],                   6),
-    comment:   colIdx(['コメント'],                   7),
-    status:    colIdx(['ステータス'],                 8),
-    adminMemo: colIdx(['管理者メモ'],                 9),
-    updatedAt: colIdx(['最終更新日時'],               10),
-    entryType: colIdx(['エントリータイプ', 'entryType'], 11),
+    id:        colIdx(['申請ID', 'ID'],                       0),
+    createdAt: colIdx(['申請日時'],                           1),
+    clubName:  colIdx(['クラブ名', '申請者（クラブ）'],       2),
+    date:      colIdx(['対象日'],                             3),
+    timeSlot:  colIdx(['時間帯'],                             4),
+    facility:  colIdx(['占有施設', '施設'],                   5),
+    content:   colIdx(['占有内容', '内容'],                   6),
+    comment:   colIdx(['コメント'],                           7),
+    status:    colIdx(['ステータス'],                         8),
+    adminMemo: colIdx(['管理者メモ'],                         9),
+    updatedAt: colIdx(['最終更新日時'],                       10),
+    entryType: colIdx(['エントリータイプ', 'entryType'],      11),
   };
   Logger.log('[getReservations] 列マッピング: ' + JSON.stringify(C));
+  Logger.log('[getReservations] → status列=' + C.status + ', entryType列=' + C.entryType);
 
   var reservations = [];
   var y = parseInt(year), m = parseInt(month);
