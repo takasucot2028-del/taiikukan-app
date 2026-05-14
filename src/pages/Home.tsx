@@ -58,6 +58,24 @@ export function Home() {
   const [filterMine, setFilterMine] = useState(false)
   const [showPushPrompt, setShowPushPrompt] = useState(false)
 
+  // クラブ未選択チェック（ブラウザが #/home を直接復元した場合に対応）
+  useEffect(() => {
+    let club = selectedClub
+    if (!club) {
+      try {
+        const stored = localStorage.getItem('taiikukan-app-storage')
+        if (stored) {
+          const parsed = JSON.parse(stored) as { state?: { selectedClub?: string } }
+          club = parsed?.state?.selectedClub ?? ''
+        }
+      } catch (e) { /* ignore */ }
+    }
+    if (!club) {
+      console.log('[Home] クラブ未選択 → club-selectへ')
+      navigate('/club-select', { replace: true })
+    }
+  }, [selectedClub, navigate])
+
   // プッシュ通知ダイアログ表示判定
   useEffect(() => {
     const supported = isPushSupported()
@@ -84,6 +102,19 @@ export function Home() {
     setSelectedClub('')
     navigate('/club-select')
   }
+
+  // クラブ未選択なら何も描画しない（useEffect のリダイレクトを待つ間のフラッシュ防止）
+  const effectiveClub = selectedClub || (() => {
+    try {
+      const stored = localStorage.getItem('taiikukan-app-storage')
+      if (stored) {
+        const parsed = JSON.parse(stored) as { state?: { selectedClub?: string } }
+        return parsed?.state?.selectedClub ?? ''
+      }
+    } catch { /* ignore */ }
+    return ''
+  })()
+  if (!effectiveClub) return null
 
   const filterClub = filterMine ? selectedClub : ''
 
