@@ -15,7 +15,6 @@ import { PrintSchedule } from './pages/PrintSchedule'
 
 function RootRedirect() {
   let selectedClub = ''
-
   try {
     const stored = localStorage.getItem('taiikukan-app-storage')
     if (stored) {
@@ -26,18 +25,11 @@ function RootRedirect() {
     console.error('[RootRedirect] parse error:', e)
   }
 
-  console.log('[RootRedirect] storage:', localStorage.getItem('taiikukan-app-storage'))
-  console.log('[RootRedirect] selectedClub:', selectedClub)
-  console.log('[RootRedirect] redirect to:', selectedClub ? '/home' : '/club-select')
+  console.log('[RootRedirect] 実行されました selectedClub:', selectedClub)
 
-  if (!selectedClub) return <Navigate to="/club-select" replace />
-  return <Navigate to="/home" replace />
-}
-
-function RequireClub({ children }: { children: React.ReactNode }) {
-  const { selectedClub } = useAppStore()
-  if (!selectedClub) return <Navigate to="/club-select" replace />
-  return <>{children}</>
+  return selectedClub
+    ? <Navigate to="/home" replace />
+    : <Navigate to="/club-select" replace />
 }
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
@@ -51,10 +43,10 @@ export default function App() {
     <HashRouter>
       <SyncIndicator />
       <Routes>
-        <Route path="/"             element={<RootRedirect />} />
-        <Route path="/club-select"  element={<ClubSelect />} />
-        <Route path="/home"         element={<RequireClub><Home /></RequireClub>} />
-        <Route path="/my-reservations" element={<RequireClub><MyReservations /></RequireClub>} />
+        <Route path="/"                element={<RootRedirect />} />
+        <Route path="/club-select"     element={<ClubSelect />} />
+        <Route path="/home"            element={<Home />} />
+        <Route path="/my-reservations" element={<MyReservations />} />
 
         <Route path="/admin"                 element={<AdminLogin />} />
         <Route path="/admin/dashboard"       element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
