@@ -72,6 +72,8 @@ function doPost(e) {
         return createResponse(deleteReservation(body));
       case 'saveConfig':
         return createResponse(saveConfig(body.config));
+      case 'saveRotation':
+        return createResponse(saveRotation(body));
       case 'registerPush':
         return createResponse(registerPush(body));
       case 'sendNotification':
@@ -500,6 +502,53 @@ function saveConfig(config) {
   }
 
   writeLog_('saveConfig', '管理者', '設定を保存しました');
+  return { success: true };
+}
+
+// ==========================================
+// saveRotation: 特定ローテーションのみ個別保存
+// ==========================================
+function saveRotation(body) {
+  var sheet = SS.getSheetByName('設定');
+  if (!sheet) return { success: false, error: '設定シートが見つかりません' };
+
+  var rotType = body.rotationType;
+  var patterns = body.patterns;
+
+  if (!patterns || patterns.length === 0) {
+    return { success: false, error: 'パターンデータが空です' };
+  }
+
+  // ローテーション種別 → 書き込み開始行のマッピング
+  var rotMap = {
+    'saturdayRotation':       SCHEDULE_ROWS.summerSatRotation.start,
+    'sundayRotation':         SCHEDULE_ROWS.summerSunRotation.start,
+    'summerVacationRotation': SCHEDULE_ROWS.summerVacRotation.start,
+    'winterSaturdayRotation': SCHEDULE_ROWS.winterSatRotation.start,
+    'winterSundayRotation':   SCHEDULE_ROWS.winterSunRotation.start,
+    'winterVacationRotation': SCHEDULE_ROWS.winterVacRotation.start,
+  };
+
+  var startRow = rotMap[rotType];
+  if (!startRow) return { success: false, error: '不明なローテーション種別: ' + rotType };
+
+  // 送られたパターン数のみ書き込む（未送信パターン行は変更しない）
+  var patternCount = patterns.length;
+  for (var p = 0; p < patternCount; p++) {
+    var pat = patterns[p] || [];
+    for (var s = 0; s < 3; s++) {
+      var rowNum = startRow + p * 3 + s;
+      var timeSlot = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00'][s];
+      sheet.getRange(rowNum, 2, 1, 8).clearContent();
+      sheet.getRange(rowNum, 2).setValue(timeSlot);
+      pat.filter(function(sl) { return sl.timeSlot === timeSlot; }).forEach(function(sl) {
+        var idx = FACILITY_NAMES.indexOf(sl.facility);
+        if (idx >= 0) sheet.getRange(rowNum, 3 + idx).setValue(sl.clubName);
+      });
+    }
+  }
+
+  writeLog_('saveRotation', '管理者', rotType + '（' + patternCount + 'パターン）を保存しました');
   return { success: true };
 }
 

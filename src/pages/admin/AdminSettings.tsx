@@ -287,80 +287,74 @@ function WeekdayScheduleTab({ config, onSave }: { config: AppConfig; onSave: (c:
   )
 }
 
-function RotationTab({ config, onSave }: { config: AppConfig; onSave: (c: AppConfig) => Promise<void> }) {
-  const [activeRot, setActiveRot] = useState(0)
+// 1種類のローテーション編集カード（個別保存）
+function RotationCard({
+  rotKey, label, count, config, onSaved,
+}: {
+  rotKey: keyof AppConfig
+  label: string
+  count: number
+  config: AppConfig
+  onSaved: (key: keyof AppConfig, patterns: SlotEntry[][]) => void
+}) {
+  const clubs = config.clubs.map((c) => c.name)
+  const rot = config[rotKey] as Rotation | null
+
+  const [localPats, setLocalPats] = useState<SlotEntry[][]>(() =>
+    Array.from({ length: count }, (_, i) => rot?.patterns?.[i] ?? [])
+  )
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const clubs = config.clubs.map((c) => c.name)
 
-  // { [rotKey]: SlotEntry[][] } - パターン数 × スロット数の編集ステート
-  const [patterns, setPatterns] = useState<Record<string, SlotEntry[][]>>(() => {
-    const r: Record<string, SlotEntry[][]> = {}
-    ROT_CONFIGS.forEach(({ key, count }) => {
-      const rot = config[key] as Rotation | null
-      const pats = rot?.patterns ?? []
-      r[key as string] = Array.from({ length: count }, (_, i) => pats[i] ?? [])
-    })
-    return r
-  })
+  const getCell = (pi: number, slot: string, f: string) =>
+    localPats[pi]?.find((s) => s.timeSlot === slot && s.facility === f)?.clubName ?? ''
 
-  const rc = ROT_CONFIGS[activeRot]
-
-  const getCell = (patIdx: number, slot: string, facility: string): string => {
-    const pat = patterns[rc.key as string][patIdx] ?? []
-    return pat.find((s) => s.timeSlot === slot && s.facility === facility)?.clubName ?? ''
-  }
-
-  const setCell = (patIdx: number, slot: string, facility: string, value: string) => {
-    setPatterns((prev) => {
-      const pats = prev[rc.key as string].map((p, i) => {
-        if (i !== patIdx) return p
-        const filtered = p.filter((s) => !(s.timeSlot === slot && s.facility === facility))
-        if (value) filtered.push({ timeSlot: slot, facility, clubName: value })
-        return filtered
+  const setCell = (pi: number, slot: string, f: string, val: string) =>
+    setLocalPats((prev) =>
+      prev.map((p, i) => {
+        if (i !== pi) return p
+        const next = p.filter((s) => !(s.timeSlot === slot && s.facility === f))
+        if (val) next.push({ timeSlot: slot, facility: f, clubName: val })
+        return next
       })
-      return { ...prev, [rc.key as string]: pats }
-    })
-  }
+    )
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const newConfig = { ...config }
-      ROT_CONFIGS.forEach(({ key }) => {
-        const existing = newConfig[key] as Rotation | null
-        ;(newConfig as Record<string, unknown>)[key as string] = {
-          ...(existing ?? { startIndex: 0 }),
-          patterns: patterns[key as string],
-        }
-      })
-      await onSave(newConfig)
+      await gasApi.saveRotation(rotKey as string, localPats)
+      onSaved(rotKey, localPats)
       setMsg('保存しました')
-    } catch { setMsg('保存に失敗しました') }
-    finally { setSaving(false); setTimeout(() => setMsg(''), 3000) }
+    } catch {
+      setMsg('保存に失敗しました')
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMsg(''), 3000)
+    }
   }
 
   return (
-    <div className="space-y-3">
-      {msg && <div className="bg-green-100 text-green-800 text-sm px-3 py-2 rounded">{msg}</div>}
-      <div className="flex gap-1 flex-wrap">
-        {ROT_CONFIGS.map((r, i) => (
-          <button key={r.key} onClick={() => setActiveRot(i)}
-            className={`px-3 py-1 rounded text-sm ${activeRot === i ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
-            {r.label}
-          </button>
-        ))}
-      </div>
+    <div className="border rounded-xl bg-white p-4 space-y-3">
+      <h3 className="font-semibold text-gray-700 text-sm">{label}ローテーション</h3>
+      {msg && (
+        <div className={`text-sm px-3 py-2 rounded ${msg.includes('失敗') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+          {msg}
+        </div>
+      )}
 
-      {Array.from({ length: rc.count }, (_, pi) => (
-        <div key={pi} className="border rounded-xl p-3 bg-white">
-          <p className="text-xs font-semibold text-gray-600 mb-2">パターン {pi + 1}</p>
+      {Array.from({ length: count }, (_, pi) => (
+        <div key={pi} className="border rounded-lg p-3 bg-gray-50">
+          <p className="text-xs font-semibold text-gray-500 mb-2">パターン {pi + 1}</p>
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse">
               <thead>
-                <tr className="bg-gray-50">
+                <tr className="bg-white">
                   <th className="border px-1 py-0.5">時間帯</th>
-                  {FACILITIES.map((f) => <th key={f} className="border px-1 py-0.5 whitespace-nowrap">{f.replace('体育館', '体')}</th>)}
+                  {FACILITIES.map((f) => (
+                    <th key={f} className="border px-1 py-0.5 whitespace-nowrap">
+                      {f.replace('体育館', '体')}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -369,8 +363,11 @@ function RotationTab({ config, onSave }: { config: AppConfig; onSave: (c: AppCon
                     <td className="border px-1 py-0.5 whitespace-nowrap font-medium">{slot}</td>
                     {FACILITIES.map((f) => (
                       <td key={f} className="border px-0.5 py-0.5">
-                        <select value={getCell(pi, slot, f)} onChange={(e) => setCell(pi, slot, f, e.target.value)}
-                          className="text-xs w-20 border-0 bg-transparent focus:ring-0">
+                        <select
+                          value={getCell(pi, slot, f)}
+                          onChange={(e) => setCell(pi, slot, f, e.target.value)}
+                          className="text-xs w-20 border-0 bg-transparent focus:ring-0"
+                        >
                           <option value="">—</option>
                           {clubs.map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -384,10 +381,43 @@ function RotationTab({ config, onSave }: { config: AppConfig; onSave: (c: AppCon
         </div>
       ))}
 
-      <button onClick={handleSave} disabled={saving}
-        className="w-full bg-blue-600 text-white rounded-lg py-2 font-medium disabled:opacity-50">
-        {saving ? '保存中...' : 'ローテーションを保存'}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50"
+      >
+        {saving ? '保存中...' : 'この設定を保存'}
       </button>
+    </div>
+  )
+}
+
+function RotationTab({ config }: { config: AppConfig }) {
+  const { setConfig } = useAppStore()
+  const [localConfig, setLocalConfig] = useState(config)
+
+  const handleSaved = useCallback((key: keyof AppConfig, patterns: SlotEntry[][]) => {
+    const rot = localConfig[key] as Rotation | null
+    const updated = {
+      ...localConfig,
+      [key]: { ...(rot ?? { startIndex: 0 }), patterns },
+    }
+    setLocalConfig(updated)
+    setConfig(updated)  // GAS は saveRotation 済みなので store のみ更新
+  }, [localConfig, setConfig])
+
+  return (
+    <div className="space-y-4">
+      {ROT_CONFIGS.map((rc) => (
+        <RotationCard
+          key={rc.key as string}
+          rotKey={rc.key}
+          label={rc.label}
+          count={rc.count}
+          config={localConfig}
+          onSaved={handleSaved}
+        />
+      ))}
     </div>
   )
 }
@@ -502,7 +532,7 @@ export function AdminSettings() {
         {activeTab === '祝日' && <HolidayTab config={config} onSave={handleSave} />}
         {activeTab === '学校行事' && <SchoolEventTab config={config} onSave={handleSave} />}
         {activeTab === '平日スケジュール' && <WeekdayScheduleTab config={config} onSave={handleSave} />}
-        {activeTab === 'ローテーション' && <RotationTab config={config} onSave={handleSave} />}
+        {activeTab === 'ローテーション' && <RotationTab config={config} />}
         {activeTab === '開始番号' && <StartIndexTab config={config} onSave={handleSave} />}
       </main>
     </div>

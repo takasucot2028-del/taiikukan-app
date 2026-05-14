@@ -178,6 +178,13 @@ export const gasApi = {
     return result
   },
 
+  /** 特定のローテーションのみを個別保存する（他のローテーションデータを変更しない） */
+  saveRotation: async (rotationType: string, patterns: DayPattern[]) => {
+    const result = await gasPost<{ success: boolean }>('saveRotation', { rotationType, patterns })
+    clearCache('config')
+    return result
+  },
+
   /** ログを取得する */
   getLogs: (params?: { year?: string; month?: string }) =>
     gasGet<{ timestamp: string; action: string; actor: string; detail: string }[]>('getLogs', params ?? {}),
