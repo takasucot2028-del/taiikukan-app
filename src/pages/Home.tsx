@@ -76,27 +76,12 @@ export function Home() {
   }, [])
 
   const handleChangeClub = () => {
-    // 1. Zustand の in-memory 状態をクリア
-    setSelectedClub('')
-
-    // 2. 新キー taiikukan-app-storage をクリア
-    try {
-      const stored = localStorage.getItem('taiikukan-app-storage')
-      if (stored) {
-        const parsed = JSON.parse(stored) as { state?: { selectedClub?: string } }
-        if (parsed?.state) {
-          parsed.state.selectedClub = ''
-          localStorage.setItem('taiikukan-app-storage', JSON.stringify(parsed))
-        }
-      }
-    } catch {
-      // パース失敗時はキーごと削除
-      localStorage.removeItem('taiikukan-app-storage')
-    }
-
-    // 3. 旧キー taiikukan-app も残っていれば削除
+    localStorage.removeItem('taiikukan-app-storage')
     localStorage.removeItem('taiikukan-app')
-
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith('cache_'))
+      .forEach((k) => localStorage.removeItem(k))
+    setSelectedClub('')
     navigate('/club-select')
   }
 

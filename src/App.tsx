@@ -16,27 +16,19 @@ import { PrintSchedule } from './pages/PrintSchedule'
 function RootRedirect() {
   let selectedClub = ''
 
-  // 新キー: taiikukan-app-storage（Zustand persist）
   try {
     const stored = localStorage.getItem('taiikukan-app-storage')
     if (stored) {
       const parsed = JSON.parse(stored) as { state?: { selectedClub?: string } }
       selectedClub = parsed?.state?.selectedClub ?? ''
     }
-  } catch { /* ignore */ }
-
-  // 旧キー: taiikukan-app（残留データがある場合の互換）
-  if (!selectedClub) {
-    try {
-      const oldStored = localStorage.getItem('taiikukan-app')
-      if (oldStored) {
-        const parsed = JSON.parse(oldStored) as { state?: { selectedClub?: string }; selectedClub?: string }
-        selectedClub = parsed?.state?.selectedClub ?? parsed?.selectedClub ?? ''
-      }
-    } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[RootRedirect] parse error:', e)
   }
 
+  console.log('[RootRedirect] storage:', localStorage.getItem('taiikukan-app-storage'))
   console.log('[RootRedirect] selectedClub:', selectedClub)
+  console.log('[RootRedirect] redirect to:', selectedClub ? '/home' : '/club-select')
 
   if (!selectedClub) return <Navigate to="/club-select" replace />
   return <Navigate to="/home" replace />
