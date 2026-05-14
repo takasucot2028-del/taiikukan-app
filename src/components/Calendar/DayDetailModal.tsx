@@ -77,6 +77,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
     setBgSyncing(true)
     try {
       await gasApi.deleteScheduleEntry(entry.id)
+      onReservationAdded()
     } catch {
       setReservations(prev)
       setSyncError('削除に失敗しました。')
@@ -94,6 +95,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
     setBgSyncing(true)
     try {
       await gasApi.restoreSlot(entry.id)
+      onReservationAdded()
     } catch {
       setReservations(prev)
       setSyncError('元に戻せませんでした。')
@@ -130,6 +132,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
       // 仮IDを正式IDに置換
       const cur = useAppStore.getState().reservations
       useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+      onReservationAdded()
     } catch {
       setReservations(prev)
       setSyncError('削除に失敗しました。')
@@ -160,6 +163,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
           availableTimeSlots={availableTimeSlots}
           onSuccess={() => { setShowScheduleForm(false); setEditingEntry(null); onClose() }}
           onCancel={() => { setShowScheduleForm(false); setEditingEntry(null) }}
+          onSaved={onReservationAdded}
         />
       </Modal>
     )
@@ -173,6 +177,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
           lockedSlot={usingSlot}
           onSuccess={() => { setUsingSlot(null); onClose() }}
           onCancel={() => setUsingSlot(null)}
+          onSaved={onReservationAdded}
         />
       </Modal>
     )

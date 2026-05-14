@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { gasApi } from '../lib/gasApi'
 import { useAppStore } from '../store'
-import { clearCache } from '../lib/cache'
+import { clearCache, clearReservationCaches } from '../lib/cache'
 
 export function useReservations() {
   const { currentYear, currentMonth, setReservations, reservations } = useAppStore()
@@ -16,11 +16,16 @@ export function useReservations() {
     }
   }, [currentYear, currentMonth, setReservations])
 
+  const refetch = useCallback(async () => {
+    clearReservationCaches()
+    await fetchData()
+  }, [fetchData])
+
   useEffect(() => {
     fetchData()
   }, [fetchData])
 
-  return { reservations, refetch: fetchData }
+  return { reservations, refetch }
 }
 
 export function useConfig() {

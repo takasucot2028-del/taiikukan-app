@@ -189,17 +189,23 @@ export function getDayClubSummary(
 
   if (reservations && reservations.length > 0) {
     const dayRes = reservations.filter((r) => r.date === dateStr)
-    const deletedSlots = dayRes.filter((r) => r.entryType === 'deleted_slot')
-    const userSchedule = dayRes.filter((r) => r.entryType === 'schedule')
+    const deletedSlotItems = dayRes.filter((r) => r.entryType === 'deleted_slot')
+    const scheduleTypeItems = dayRes.filter((r) => r.entryType === 'schedule')
 
     effective = effective.filter(
-      (s) => !userSchedule.some((r) => r.timeSlot === s.timeSlot && r.facility === s.facility)
+      (s) => !scheduleTypeItems.some((r) => r.timeSlot === s.timeSlot && r.facility === s.facility)
     )
     effective = effective.filter(
-      (s) => !deletedSlots.some((d) => d.timeSlot === s.timeSlot && d.facility === s.facility)
+      (s) => !deletedSlotItems.some((d) => d.timeSlot === s.timeSlot && d.facility === s.facility)
     )
-    userSchedule.forEach((r) => {
+    scheduleTypeItems.forEach((r) => {
       effective.push({ timeSlot: r.timeSlot, facility: r.facility, clubName: r.clubName })
+    })
+    console.log('[schedule] 予約データ適用:', {
+      date: dateStr,
+      scheduleItems: scheduleTypeItems.length,
+      deletedSlots: deletedSlotItems.length,
+      result: effective.length
     })
   }
 

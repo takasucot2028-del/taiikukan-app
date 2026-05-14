@@ -19,9 +19,10 @@ interface Props {
   lockedSlot?: { timeSlot: string; facility: string }
   onSuccess: () => void
   onCancel: () => void
+  onSaved?: () => void
 }
 
-export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot, onSuccess, onCancel }: Props) {
+export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot, onSuccess, onCancel, onSaved }: Props) {
   const { selectedClub, reservations: allReservations, setReservations, setBgSyncing, setSyncError } = useAppStore()
   const slots = availableTimeSlots ?? DEFAULT_TIME_SLOTS
 
@@ -45,6 +46,7 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
       setBgSyncing(true)
       try {
         await gasApi.updateReservation(entry.id, { timeSlot, facility, content })
+        onSaved?.()
       } catch {
         setReservations(prev)
         setSyncError('更新に失敗しました。')
@@ -76,6 +78,7 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
         // 仮IDを正式IDに置換（アンマウント後もストアから直接操作）
         const cur = useAppStore.getState().reservations
         useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+        onSaved?.()
       } catch {
         const cur = useAppStore.getState().reservations
         useAppStore.getState().setReservations(cur.filter(r => r.id !== tempId))
