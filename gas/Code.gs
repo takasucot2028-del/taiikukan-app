@@ -452,44 +452,40 @@ function saveConfig(config) {
     }
   }
 
-  // 空パターンはスキップ（スプレッドシートの既存データを保護）
-  function writeRotationSafe(patterns, startRow, count) {
+  // データが存在するパターンのみ書き込む（空データによるスプレッドシート上書きを防止）
+  function writeRotationIfNotEmpty(patterns, startRow, patternCount) {
     if (!patterns || patterns.length === 0) return;
     var hasData = patterns.some(function(pat) { return pat && pat.length > 0; });
     if (!hasData) return;
-    writeRotation(patterns, startRow, count);
+    writeRotation(patterns, startRow, patternCount);
   }
 
-  // 夏季土曜（行13-21）: フロントは patterns で送信、旧形式 summerPatterns にも対応
-  if (config.saturdayRotation) {
-    var satSumPats = config.saturdayRotation.patterns || config.saturdayRotation.summerPatterns;
-    writeRotationSafe(satSumPats, SCHEDULE_ROWS.summerSatRotation.start, 3);
-  }
-  // 夏季日曜（行25-33）: 同上
-  if (config.sundayRotation) {
-    var sunSumPats = config.sundayRotation.patterns || config.sundayRotation.summerPatterns;
-    writeRotationSafe(sunSumPats, SCHEDULE_ROWS.summerSunRotation.start, 3);
-  }
+  // 夏季土曜（行13-21）: patterns 優先、旧形式 summerPatterns にも対応
+  writeRotationIfNotEmpty(
+    config.saturdayRotation ? (config.saturdayRotation.patterns || config.saturdayRotation.summerPatterns) : null,
+    SCHEDULE_ROWS.summerSatRotation.start, 3);
+  // 夏季日曜（行25-33）
+  writeRotationIfNotEmpty(
+    config.sundayRotation ? (config.sundayRotation.patterns || config.sundayRotation.summerPatterns) : null,
+    SCHEDULE_ROWS.summerSunRotation.start, 3);
   // 冬季土曜（行37-54）: winterSaturdayRotation.patterns 優先
-  if (config.winterSaturdayRotation) {
-    writeRotationSafe(config.winterSaturdayRotation.patterns, SCHEDULE_ROWS.winterSatRotation.start, 6);
-  } else if (config.saturdayRotation && config.saturdayRotation.winterPatterns) {
-    writeRotationSafe(config.saturdayRotation.winterPatterns, SCHEDULE_ROWS.winterSatRotation.start, 3);
-  }
-  // 冬季日曜（行58-75）: winterSundayRotation.patterns 優先
-  if (config.winterSundayRotation) {
-    writeRotationSafe(config.winterSundayRotation.patterns, SCHEDULE_ROWS.winterSunRotation.start, 6);
-  } else if (config.sundayRotation && config.sundayRotation.winterPatterns) {
-    writeRotationSafe(config.sundayRotation.winterPatterns, SCHEDULE_ROWS.winterSunRotation.start, 3);
-  }
+  writeRotationIfNotEmpty(
+    config.winterSaturdayRotation ? config.winterSaturdayRotation.patterns :
+      (config.saturdayRotation ? config.saturdayRotation.winterPatterns : null),
+    SCHEDULE_ROWS.winterSatRotation.start, 6);
+  // 冬季日曜（行58-75）
+  writeRotationIfNotEmpty(
+    config.winterSundayRotation ? config.winterSundayRotation.patterns :
+      (config.sundayRotation ? config.sundayRotation.winterPatterns : null),
+    SCHEDULE_ROWS.winterSunRotation.start, 6);
   // 夏季休暇（行80-88）
-  if (config.summerVacationRotation) {
-    writeRotationSafe(config.summerVacationRotation.patterns, SCHEDULE_ROWS.summerVacRotation.start, 3);
-  }
+  writeRotationIfNotEmpty(
+    config.summerVacationRotation ? config.summerVacationRotation.patterns : null,
+    SCHEDULE_ROWS.summerVacRotation.start, 3);
   // 冬季休暇（行92-100）
-  if (config.winterVacationRotation) {
-    writeRotationSafe(config.winterVacationRotation.patterns, SCHEDULE_ROWS.winterVacRotation.start, 3);
-  }
+  writeRotationIfNotEmpty(
+    config.winterVacationRotation ? config.winterVacationRotation.patterns : null,
+    SCHEDULE_ROWS.winterVacRotation.start, 3);
 
   // ローテーション開始番号（1〜12行目を検索して更新）
   var lastRow12 = sheet.getRange(1, 1, 12, 2).getValues();
