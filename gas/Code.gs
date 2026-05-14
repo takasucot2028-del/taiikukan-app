@@ -659,7 +659,7 @@ function sendNotification(title, body) {
 // Time-drivenトリガーに設定してください
 // ==========================================
 function sendMonthlyReminder() {
-  sendNotification('体育館予約 締め切り通知', '翌月分の占有予約申請の締め切りは今月20日です');
+  sendNotification('体育館予約 締め切り通知', '翌月分の占有予約申請の締め切りは今月10日です');
 }
 
 // ==========================================

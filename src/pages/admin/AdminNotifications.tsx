@@ -46,7 +46,7 @@ export function AdminNotifications() {
     try {
       const res = await gasApi.sendPushNotification(
         '体育館予約 締め切り通知',
-        `翌月分の占有予約申請の締め切りは今月20日です`
+        `翌月分の占有予約申請の締め切りは今月10日です`
       )
       showMsg(`送信しました（${res.sent}端末）`)
     } catch {
@@ -92,7 +92,7 @@ export function AdminNotifications() {
             <p className="text-sm font-medium text-gray-700 mb-1">締め切りリマインド</p>
             <p className="text-xs text-gray-500 mb-2">
               タイトル：体育館予約 締め切り通知<br />
-              本文：翌月分の占有予約申請の締め切りは今月20日です
+              本文：翌月分の占有予約申請の締め切りは今月10日です
             </p>
             <button onClick={handleSendReminder} disabled={sending}
               className="w-full bg-amber-500 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50">

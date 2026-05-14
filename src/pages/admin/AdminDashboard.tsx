@@ -27,7 +27,7 @@ export function AdminDashboard() {
   const pending = thisMonth.filter((r) => r.status === '申請中' && r.entryType === 'reservation')
   const isConfirmed = thisMonth.some((r) => r.entryType === 'confirmed_month')
 
-  const deadline = new Date(currentYear, currentMonth - 1 + 1, 20)
+  const deadline = new Date(currentYear, currentMonth - 1 + 1, 10)
   const today = new Date()
   const daysLeft = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
