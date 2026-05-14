@@ -14,8 +14,21 @@ import { AdminNotifications } from './pages/admin/AdminNotifications'
 import { PrintSchedule } from './pages/PrintSchedule'
 
 function RootRedirect() {
-  const { selectedClub } = useAppStore()
-  return <Navigate to={selectedClub ? '/home' : '/club-select'} replace />
+  // Zustand の persist は初回レンダリング時に非同期復元されることがあるため
+  // localStorage を直接読んで判定する（より確実）
+  let selectedClub = ''
+  try {
+    const stored = localStorage.getItem('taiikukan-app-storage')
+    if (stored) {
+      const parsed = JSON.parse(stored) as { state?: { selectedClub?: string } }
+      selectedClub = parsed?.state?.selectedClub ?? ''
+    }
+  } catch { /* 読み取り失敗時はクラブ未選択として扱う */ }
+
+  console.log('[RootRedirect] selectedClub from storage:', selectedClub)
+
+  if (!selectedClub) return <Navigate to="/club-select" replace />
+  return <Navigate to="/home" replace />
 }
 
 function RequireClub({ children }: { children: React.ReactNode }) {

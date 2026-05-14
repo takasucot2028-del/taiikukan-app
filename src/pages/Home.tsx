@@ -76,17 +76,19 @@ export function Home() {
   }, [])
 
   const handleChangeClub = () => {
-    setSelectedClub('')
+    // まず localStorage を直接クリアして Zustand persist の上書きを防ぐ
     try {
       const raw = localStorage.getItem('taiikukan-app-storage')
       if (raw) {
         const parsed = JSON.parse(raw) as { state?: { selectedClub?: string } }
-        if (parsed.state) {
+        if (parsed?.state) {
           parsed.state.selectedClub = ''
           localStorage.setItem('taiikukan-app-storage', JSON.stringify(parsed))
         }
       }
     } catch { /* ignore */ }
+    // Zustand の in-memory 状態もクリア
+    setSelectedClub('')
     navigate('/club-select', { replace: true })
   }
 
