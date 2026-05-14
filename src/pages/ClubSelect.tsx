@@ -16,10 +16,10 @@ export function ClubSelect() {
   const [search, setSearch] = useState('')
   const [volleyOpen, setVolleyOpen] = useState(false)
 
-  console.log('[ClubSelect] localStorage:', localStorage.getItem('taiikukan-app-storage'))
-
   const handleSelect = (clubName: string) => {
+    // Zustand ストアを更新（persist が taiikukan-app-storage へ同期書き込み）
     setSelectedClub(clubName)
+    console.log('[ClubSelect] selected:', clubName, '/ storage:', localStorage.getItem('taiikukan-app-storage'))
     navigate('/home')
   }
 
