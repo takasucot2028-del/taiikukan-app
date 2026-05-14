@@ -255,34 +255,69 @@ function readRotationPatterns_(data, startRow, patternCount) {
 
 // ==========================================
 // getReservations: 予約申請一覧取得
+// ヘッダー名で列を動的検索（列順が変わっても正しく読み取る）
 // ==========================================
 function getReservations(year, month) {
   var sheet = SS.getSheetByName('予約申請');
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+
+  // ヘッダー行から各列インデックスを動的に取得
+  var headers = data[0].map(function(h) { return String(h).trim(); });
+  Logger.log('[getReservations] ヘッダー: ' + headers.join(' | '));
+
+  function colIdx(candidates, fallback) {
+    for (var i = 0; i < candidates.length; i++) {
+      var idx = headers.indexOf(candidates[i]);
+      if (idx >= 0) return idx;
+    }
+    return fallback;
+  }
+
+  var C = {
+    id:        colIdx(['申請ID'],                     0),
+    createdAt: colIdx(['申請日時'],                   1),
+    clubName:  colIdx(['クラブ名', '申請者（クラブ）'], 2),
+    date:      colIdx(['対象日'],                     3),
+    timeSlot:  colIdx(['時間帯'],                     4),
+    facility:  colIdx(['占有施設'],                   5),
+    content:   colIdx(['占有内容'],                   6),
+    comment:   colIdx(['コメント'],                   7),
+    status:    colIdx(['ステータス'],                 8),
+    adminMemo: colIdx(['管理者メモ'],                 9),
+    updatedAt: colIdx(['最終更新日時'],               10),
+    entryType: colIdx(['エントリータイプ', 'entryType'], 11),
+  };
+  Logger.log('[getReservations] 列マッピング: ' + JSON.stringify(C));
+
   var reservations = [];
   var y = parseInt(year), m = parseInt(month);
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (!row[0]) continue;
-    var status = String(row[8]);
-    if (status === '削除済み') continue;  // 削除済みは除外
-    var date = formatDate_(row[3]);
+    if (!row[C.id]) continue;
+    var status = String(row[C.status]);
+    if (status === '削除済み') continue;
+    var date = formatDate_(row[C.date]);
     var parts = date.split('-');
     if (parseInt(parts[0]) !== y || parseInt(parts[1]) !== m) continue;
+    var entryType = String(row[C.entryType] || '').trim();
+    // entryTypeが空またはステータス値なら'reservation'にフォールバック
+    var validTypes = ['reservation', 'schedule', 'deleted_slot', 'confirmed_month'];
+    if (validTypes.indexOf(entryType) < 0) entryType = 'reservation';
     reservations.push({
-      id:        String(row[0]),
-      createdAt: formatDateTime_(row[1]),
-      clubName:  String(row[2]),
+      id:        String(row[C.id]),
+      createdAt: formatDateTime_(row[C.createdAt]),
+      clubName:  String(row[C.clubName]),
       date:      date,
-      timeSlot:  String(row[4]),
-      facility:  String(row[5]),
-      content:   String(row[6]),
-      comment:   String(row[7] || ''),
+      timeSlot:  String(row[C.timeSlot]),
+      facility:  String(row[C.facility]),
+      content:   String(row[C.content]),
+      comment:   String(row[C.comment] || ''),
       status:    status,
-      adminMemo: String(row[9] || ''),
-      updatedAt: formatDateTime_(row[10]),
-      entryType: String(row[11] || 'reservation'),  // L列: エントリータイプ
+      adminMemo: String(row[C.adminMemo] || ''),
+      updatedAt: formatDateTime_(row[C.updatedAt]),
+      entryType: entryType,
     });
   }
   return reservations;
@@ -804,6 +839,69 @@ function debugAdminPin() {
       Logger.log((240 + i) + ': ' + row[0] + ' | ' + row[1]);
     }
   });
+}
+
+// ==========================================
+// debugAllColumns: シートの実際の列構成を全表示
+// 列ずれ診断に使用。GASエディタから手動実行。
+// ==========================================
+function debugAllColumns() {
+  var sheet = SS.getSheetByName('予約申請');
+  if (!sheet) { Logger.log('予約申請シートが見つかりません'); return; }
+  var data = sheet.getDataRange().getValues();
+  Logger.log('=== 予約申請シート 列構成診断 ===');
+  Logger.log('総列数: ' + data[0].length);
+  Logger.log('ヘッダー行:');
+  data[0].forEach(function(h, i) {
+    Logger.log('  列' + (i + 1) + '（index ' + i + '）: ' + String(h));
+  });
+  Logger.log('--- 先頭4件のデータ（全列） ---');
+  for (var i = 1; i <= Math.min(4, data.length - 1); i++) {
+    if (!data[i][0]) continue;
+    Logger.log('行' + (i + 1) + ':');
+    data[i].forEach(function(v, j) {
+      if (v !== '' && v !== null && v !== undefined) {
+        var disp = v instanceof Date ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm') : String(v);
+        Logger.log('  [' + j + '] ' + String(data[0][j]) + ' = ' + disp);
+      }
+    });
+  }
+}
+
+// ==========================================
+// repairEntryTypeColumn: entryType列が空のレコードを修復
+// schedule/deleted_slot/confirmed_monthが正しく保存されていない場合に実行
+// ==========================================
+function repairEntryTypeColumn() {
+  var sheet = SS.getSheetByName('予約申請');
+  if (!sheet) { Logger.log('シートなし'); return; }
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0].map(function(h) { return String(h).trim(); });
+
+  // エントリータイプ列を特定
+  var etIdx = headers.indexOf('エントリータイプ');
+  if (etIdx < 0) etIdx = headers.indexOf('entryType');
+  if (etIdx < 0) {
+    // 列が存在しない → 末尾に追加
+    etIdx = headers.length;
+    sheet.getRange(1, etIdx + 1).setValue('エントリータイプ');
+    Logger.log('エントリータイプ列を追加: 列' + (etIdx + 1));
+  } else {
+    Logger.log('エントリータイプ列: 列' + (etIdx + 1) + '（index ' + etIdx + '）');
+  }
+
+  var validTypes = ['reservation', 'schedule', 'deleted_slot', 'confirmed_month'];
+  var fixed = 0;
+  for (var i = 1; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    var current = String(data[i][etIdx] || '').trim();
+    if (validTypes.indexOf(current) >= 0) continue; // 正常
+    // 空またはステータス値など → 'reservation' に補完
+    sheet.getRange(i + 1, etIdx + 1).setValue('reservation');
+    Logger.log('行' + (i + 1) + ' 修復: "' + current + '" → "reservation"');
+    fixed++;
+  }
+  Logger.log('修復完了: ' + fixed + '件');
 }
 
 // ==========================================
