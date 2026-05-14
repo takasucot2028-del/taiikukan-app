@@ -10,6 +10,13 @@ export function useReservations() {
     try {
       const data = await gasApi.getReservations(currentYear, currentMonth)
       console.log('[useReservations] 取得件数:', data.length)
+      console.log('[useReservations] 全データ:', data.map(r => ({
+        id: r.id,
+        entryType: r.entryType,
+        date: r.date,
+        club: r.clubName,
+        status: r.status,
+      })))
       setReservations(data)
     } catch (e) {
       console.error('[useReservations] 予約データ取得エラー', e)

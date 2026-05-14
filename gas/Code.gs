@@ -805,3 +805,43 @@ function debugAdminPin() {
     }
   });
 }
+
+// ==========================================
+// debugGetReservations: 予約申請シートの全レコードを確認
+// GASエディタで実行して type='schedule' のレコードが存在するか確認
+// ==========================================
+function debugGetReservations() {
+  var sheet = SS.getSheetByName('予約申請');
+  if (!sheet) { Logger.log('予約申請シートが見つかりません'); return; }
+  var data = sheet.getDataRange().getValues();
+  Logger.log('=== 予約申請シート全レコード ===');
+  Logger.log('総行数（ヘッダー含む）: ' + data.length);
+  Logger.log('ヘッダー: ' + data[0].join(' | '));
+  var counts = { reservation: 0, schedule: 0, deleted_slot: 0, confirmed_month: 0, other: 0, deleted: 0 };
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    var status   = String(row[8]);
+    var entryType = String(row[11] || 'reservation');
+    var date     = row[3] ? Utilities.formatDate(new Date(row[3]), 'Asia/Tokyo', 'yyyy-MM-dd') : '';
+    var club     = String(row[2]);
+    if (status === '削除済み') { counts.deleted++; continue; }
+    if (counts[entryType] !== undefined) counts[entryType]++;
+    else counts.other++;
+    Logger.log(
+      'ID=' + row[0] +
+      ' entryType=' + entryType +
+      ' status=' + status +
+      ' date=' + date +
+      ' club=' + club +
+      ' timeSlot=' + String(row[4]) +
+      ' facility=' + String(row[5])
+    );
+  }
+  Logger.log('--- 集計 ---');
+  Logger.log('reservation(占有予約): ' + counts.reservation);
+  Logger.log('schedule(指導者予定): '  + counts.schedule);
+  Logger.log('deleted_slot(空き枠): '  + counts.deleted_slot);
+  Logger.log('confirmed_month(確定): ' + counts.confirmed_month);
+  Logger.log('削除済み(除外): '        + counts.deleted);
+}

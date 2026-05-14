@@ -191,6 +191,10 @@ export function getDayClubSummary(
     const dayRes = reservations.filter((r) => r.date === dateStr)
     const deletedSlotItems = dayRes.filter((r) => r.entryType === 'deleted_slot')
     const scheduleTypeItems = dayRes.filter((r) => r.entryType === 'schedule')
+    if (scheduleTypeItems.length > 0 || deletedSlotItems.length > 0) {
+      console.log('[getDaySchedule] reservations数:', reservations.length, 'date:', dateStr)
+      console.log('[getDaySchedule] scheduleItems:', scheduleTypeItems.length, scheduleTypeItems.map(r => ({ club: r.clubName, slot: r.timeSlot, facility: r.facility })))
+    }
 
     effective = effective.filter(
       (s) => !scheduleTypeItems.some((r) => r.timeSlot === s.timeSlot && r.facility === s.facility)
