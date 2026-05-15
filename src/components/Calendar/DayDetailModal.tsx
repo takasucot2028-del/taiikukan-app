@@ -62,6 +62,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
   const scheduleEntries = reservations.filter((r) => r.entryType === 'schedule')
   const deletedSlotEntries = reservations.filter((r) => r.entryType === 'deleted_slot')
   const reservationEntries = reservations.filter((r) => r.entryType === 'reservation')
+  const confirmedResvEntries = reservationEntries.filter((r) => r.status === '確定')
 
   const defaultSlots = getDefaultTimeSlots(date, config)
   const scheduleSlots = [...new Set(schedule.map((s) => s.timeSlot))]
@@ -190,15 +191,18 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
           const fixedEntries = schedule.filter((s) => s.timeSlot === slot)
           const userScheduleForSlot = scheduleEntries.filter((r) => r.timeSlot === slot)
           const deletedSlotsForSlot = deletedSlotEntries.filter((r) => r.timeSlot === slot)
-          const occupancyForSlot = reservationEntries.filter(
+          const confirmedResvForSlot = confirmedResvEntries.filter(
             (r) => r.timeSlot === slot || r.timeSlot === '終日'
           )
+          const occupancyForSlot = reservationEntries.filter(
+            (r) => r.status !== '確定' && (r.timeSlot === slot || r.timeSlot === '終日')
+          )
 
-          // Collect facilities in order: fixed first, then extras from deleted/user-added
+          // Collect facilities in order: fixed first, then extras from deleted/user-added/confirmed
           const fixedFacilities = fixedEntries.map((s) => s.facility)
           const seen = new Set(fixedFacilities)
           const extraFacilities: string[] = []
-          ;[...deletedSlotsForSlot, ...userScheduleForSlot].forEach((r) => {
+          ;[...confirmedResvForSlot, ...deletedSlotsForSlot, ...userScheduleForSlot].forEach((r) => {
             if (!seen.has(r.facility)) { extraFacilities.push(r.facility); seen.add(r.facility) }
           })
           const allFacilities = [...fixedFacilities, ...extraFacilities]
@@ -208,9 +212,18 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
               <p className="text-sm font-semibold text-gray-600 mb-2">{slot}</p>
 
               {allFacilities.map((facility) => {
+                const confirmedResv = confirmedResvForSlot.find((r) => r.facility === facility)
                 const userEntry = userScheduleForSlot.find((r) => r.facility === facility)
                 const deletedSlot = deletedSlotsForSlot.find((r) => r.facility === facility)
                 const fixedEntry = fixedEntries.find((s) => s.facility === facility)
+
+                if (confirmedResv) {
+                  return (
+                    <div key={facility} className="text-sm bg-red-100 text-red-800 px-2 py-1.5 rounded mb-1 flex items-center gap-1 border-l-4 border-red-500">
+                      <span className="flex-1 min-w-0 break-words">{facility}：【占有】{confirmedResv.clubName}（{confirmedResv.content}）</span>
+                    </div>
+                  )
+                }
 
                 if (userEntry) {
                   const uc = getClubColor(userEntry.clubName)
