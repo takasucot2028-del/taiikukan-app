@@ -4,6 +4,10 @@ import type { AppConfig, Reservation, SlotEntry } from '../types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type XLSXModule = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WsCell = Record<string, any>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Worksheet = Record<string, any>
 
 const SOUGO_FACILITIES = ['総合体育館 半面A', '総合体育館 半面B', '総合体育館（全面）']
 const WEEKDAYS_JP = ['日', '月', '火', '水', '木', '金', '土']
@@ -110,7 +114,9 @@ function buildAllEntries(
   return entries
 }
 
-function groupEntries(entries: DateEntry[]): Map<string, { facilityType: '半面' | '全面'; entries: DateEntry[] }> {
+function groupEntries(
+  entries: DateEntry[],
+): Map<string, { facilityType: '半面' | '全面'; entries: DateEntry[] }> {
   const groupMap = new Map<string, { facilityType: '半面' | '全面'; entries: DateEntry[] }>()
   for (const entry of entries) {
     const key = `${entry.clubName}|${entry.facilityType}`
@@ -154,43 +160,77 @@ function sanitizeSheetName(name: string): string {
   return name.replace(/[:\\/?*[\]]/g, '_').slice(0, 31)
 }
 
-function buildSheetRows(
+/** セルに値を書き込む。既存セルがあればv/tのみ上書き */
+function setCell(ws: Worksheet, addr: string, value: string | number): void {
+  const t = typeof value === 'number' ? 'n' : 's'
+  const existing: WsCell = ws[addr]
+  if (existing) {
+    existing.v = value
+    existing.t = t
+    // 数値セルはフォーマットを保持するためwのみ削除
+    delete existing.w
+  } else {
+    ws[addr] = { v: value, t }
+  }
+}
+
+/**
+ * テンプレートシートをディープコピーして各フィールドを埋める
+ *
+ * 原稿シートの入力セル（VOREASサンプル & 空白テンプレートの調査結果より）:
+ *   W15 : 申請日（例: 令和8年5月20日）
+ *   T21 : 個人名・主催団体名（クラブ名）
+ *   T25 : 申請者名
+ *   T28 : 住所
+ *   Y31 : 電話番号
+ *   R38 : 利用面文字（"全" or "半"）
+ *   H43 : 利用目的・内容
+ *   日時行 (49/51/53):
+ *     I列: 元号年（数値）  L列: 月  O列: 日
+ *     R列: "( 曜 ）"文字列
+ *     U列: 開始時  X列: 開始分（"00"等）
+ *     AB列: 終了時  AE列: 終了分
+ */
+function fillSheet(
+  templateWs: Worksheet,
   clubName: string,
   facilityType: '半面' | '全面',
   pageEntries: DateEntry[],
-): string[][] {
-  const today = new Date()
-  const { era, eraYear } = toWareki(today.getFullYear())
-  const outputDate = `${era}${eraYear}年${today.getMonth() + 1}月${today.getDate()}日`
-  const facilityName = facilityType === '半面' ? '総合体育館（半面）' : '総合体育館（全面）'
+  outputDateStr: string,
+): Worksheet {
+  const ws: Worksheet = JSON.parse(JSON.stringify(templateWs))
 
-  const rows: string[][] = Array.from({ length: 60 }, () => ['', '', '', '', '', '', ''])
+  setCell(ws, 'W15', outputDateStr)
+  setCell(ws, 'T21', clubName)
+  setCell(ws, 'T25', '一般社団法人たかすスポーツクラブ')
+  setCell(ws, 'T28', '鷹栖町南２条４丁目１番２号')
+  setCell(ws, 'Y31', '0166-87-4291')
+  setCell(ws, 'R38', facilityType === '全面' ? '全' : '半')
+  setCell(ws, 'H43', '定期練習')
 
-  rows[0] = ['鷹栖町体育館利用許可申請書', '', '', '', '', '', '']
-  rows[13] = ['', '', '', '', '', '', outputDate]
-  rows[15] = ['鷹栖町体育施設指定管理者', '', '', '', '', '', '']
-  rows[16] = ['一般社団法人　たかすスポーツクラブ　様', '', '', '', '', '', '']
-  rows[19] = [`個人名・主催団体名：${clubName}`, '', '', '', '', '', '']
-  rows[23] = ['申請者名：一般社団法人たかすスポーツクラブ', '', '', '', '', '', '']
-  rows[26] = ['住所：鷹栖町南２条４丁目１番２号', '', '', '', '', '', '']
-  rows[29] = ['℡：0166-87-4291', '', '', '', '', '', '']
-  rows[36] = [`利用体育館：${facilityName}`, '', '', '', '', '', '']
-  rows[41] = ['利用目的・内容：定期練習', '', '', '', '', '', '']
+  // 日時行のセル列アドレス (原稿シートの行49・51・53)
+  const dateRowAddrs = [
+    { row: 49, yr: 'I49', mo: 'L49', dy: 'O49', wd: 'R49', sH: 'U49', sM: 'X49', eH: 'AB49', eM: 'AE49' },
+    { row: 51, yr: 'I51', mo: 'L51', dy: 'O51', wd: 'R51', sH: 'U51', sM: 'X51', eH: 'AB51', eM: 'AE51' },
+    { row: 53, yr: 'I53', mo: 'L53', dy: 'O53', wd: 'R53', sH: 'U53', sM: 'X53', eH: 'AB53', eM: 'AE53' },
+  ]
 
-  const dateRowIndices = [47, 49, 51]
   for (let i = 0; i < Math.min(pageEntries.length, 3); i++) {
     const e = pageEntries[i]
-    const { era: eE, eraYear: eyE } = toWareki(e.year)
-    const dayPadded = String(e.day).padStart(2, ' ')
-    const startTime = `${String(e.startH).padStart(2, '0')}時${String(e.startM).padStart(2, '0')}分`
-    const endTime = `${String(e.endH).padStart(2, '0')}時${String(e.endM).padStart(2, '0')}分`
-    rows[dateRowIndices[i]] = [
-      `・${eE}${eyE}年 ${e.month}月${dayPadded}日（${e.weekday}） ${startTime}〜${endTime}`,
-      '', '', '', '', '', '',
-    ]
+    const dr = dateRowAddrs[i]
+    const { eraYear } = toWareki(e.year)
+
+    setCell(ws, dr.yr, eraYear)
+    setCell(ws, dr.mo, e.month)
+    setCell(ws, dr.dy, e.day)
+    setCell(ws, dr.wd, `( ${e.weekday} ）`)
+    setCell(ws, dr.sH, e.startH)
+    setCell(ws, dr.sM, String(e.startM).padStart(2, '0'))
+    setCell(ws, dr.eH, e.endH)
+    setCell(ws, dr.eM, String(e.endM).padStart(2, '0'))
   }
 
-  return rows
+  return ws
 }
 
 export async function exportApplicationForm(
@@ -201,10 +241,23 @@ export async function exportApplicationForm(
 ): Promise<void> {
   const XLSX: XLSXModule = await import('xlsx-js-style')
 
+  // テンプレートを取得 (public/templates/ に配置済み)
+  const templateUrl = `${import.meta.env.BASE_URL}templates/soutai_template.xlsx`
+  const response = await fetch(templateUrl)
+  if (!response.ok) throw new Error(`テンプレート取得失敗: ${response.status}`)
+  const buffer = await response.arrayBuffer()
+  const templateWb: XLSXModule = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+  const templateWs: Worksheet = templateWb.Sheets['原稿']
+  if (!templateWs) throw new Error('テンプレートの「原稿」シートが見つかりません')
+
   const allEntries = buildAllEntries(year, month, config, reservations)
   const groupMap = groupEntries(allEntries)
 
   const wb = XLSX.utils.book_new()
+
+  const today = new Date()
+  const { era, eraYear } = toWareki(today.getFullYear())
+  const outputDateStr = `${era}${eraYear}年${today.getMonth() + 1}月${today.getDate()}日`
 
   const sortedGroups = [...groupMap.entries()].sort(([a], [b]) =>
     a.split('|')[0].localeCompare(b.split('|')[0], 'ja'),
@@ -224,27 +277,7 @@ export async function exportApplicationForm(
       const rawName = sheetNum === 1 ? clubName : `${clubName}(${sheetNum})`
       const sheetName = sanitizeSheetName(rawName)
 
-      const rows = buildSheetRows(clubName, facilityType, pageEntries)
-      const ws = XLSX.utils.aoa_to_sheet(rows)
-
-      ws['!cols'] = [
-        { wch: 46 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 16 },
-      ]
-
-      const titleCell = 'A1'
-      if (ws[titleCell]) {
-        ws[titleCell].s = {
-          font: { bold: true, sz: 14 },
-          alignment: { horizontal: 'center' },
-        }
-      }
-
+      const ws = fillSheet(templateWs, clubName, facilityType, pageEntries, outputDateStr)
       XLSX.utils.book_append_sheet(wb, ws, sheetName)
     }
   }
