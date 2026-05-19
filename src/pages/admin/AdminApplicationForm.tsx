@@ -1,51 +1,33 @@
 import { useState } from 'react'
 import { useAppStore } from '../../store'
-import { gasApi } from '../../lib/gasApi'
 import { AdminNav } from '../../components/admin/AdminNav'
-import {
-  previewApplicationForm,
-  exportApplicationForm,
-  type ApplicationPreview,
-} from '../../lib/applicationFormExport'
-import type { Reservation } from '../../types'
+import { previewApplicationForm, exportApplicationForm, type ApplicationPreview } from '../../lib/applicationFormExport'
 
 export function AdminApplicationForm() {
   const { currentYear, currentMonth, config } = useAppStore()
 
   const [year, setYear] = useState(currentYear)
   const [month, setMonth] = useState(currentMonth)
-  const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [message, setMessage] = useState('')
   const [preview, setPreview] = useState<ApplicationPreview[] | null>(null)
-  const [loadedReservations, setLoadedReservations] = useState<Reservation[] | null>(null)
 
-  const handleLoad = async () => {
+  const handleLoad = () => {
     if (!config) { setMessage('設定データを読み込み中です'); return }
-    setLoading(true)
-    setPreview(null)
     setMessage('')
-    try {
-      const reservations = await gasApi.getReservations(year, month)
-      setLoadedReservations(reservations)
-      const result = previewApplicationForm(year, month, config, reservations)
-      setPreview(result)
-      if (result.length === 0) {
-        setMessage('この月に総合体育館を使用するクラブはありません')
-      }
-    } catch {
-      setMessage('データの読み込みに失敗しました')
-    } finally {
-      setLoading(false)
+    const result = previewApplicationForm(year, month, config)
+    setPreview(result)
+    if (result.length === 0) {
+      setMessage('この月に総合体育館を使用するクラブはありません')
     }
   }
 
   const handleExport = async () => {
-    if (!config || !loadedReservations) return
+    if (!config) return
     setExporting(true)
     setMessage('')
     try {
-      await exportApplicationForm(year, month, config, loadedReservations)
+      await exportApplicationForm(year, month, config)
       setMessage('申請書を出力しました')
     } catch (e) {
       console.error(e)
@@ -95,10 +77,10 @@ export function AdminApplicationForm() {
             </select>
             <button
               onClick={handleLoad}
-              disabled={loading || !config}
+              disabled={!config}
               className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
-              {loading ? '読み込み中...' : 'データ確認'}
+              データ確認
             </button>
           </div>
           {!config && (
@@ -118,7 +100,7 @@ export function AdminApplicationForm() {
                 <tr className="text-left text-xs text-gray-500 border-b">
                   <th className="pb-2 pr-4">クラブ名</th>
                   <th className="pb-2 pr-4">施設</th>
-                  <th className="pb-2 pr-4 text-right">利用回数</th>
+                  <th className="pb-2 pr-4 text-right">利用日数</th>
                   <th className="pb-2 text-right">シート数</th>
                 </tr>
               </thead>
@@ -135,8 +117,8 @@ export function AdminApplicationForm() {
                         {p.facilityType}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 text-right text-gray-600">{p.entryCount}回</td>
-                    <td className="py-2 text-right text-gray-600">{p.sheetCount}枚</td>
+                    <td className="py-2 pr-4 text-right text-gray-600">{p.entryCount}件</td>
+                    <td className="py-2 text-right text-gray-600">{p.sheetCount}シート</td>
                   </tr>
                 ))}
               </tbody>
@@ -149,7 +131,7 @@ export function AdminApplicationForm() {
             >
               {exporting
                 ? '生成中...'
-                : `${year}年${String(month).padStart(2, '0')}月_総合体育館利用申請書.xlsx をダウンロード`}
+                : `📄 申請書をダウンロード（${year}年${String(month).padStart(2, '0')}月）`}
             </button>
           </div>
         )}
@@ -158,8 +140,9 @@ export function AdminApplicationForm() {
         <div className="bg-white border rounded-xl p-4 text-xs text-gray-500 space-y-1">
           <p className="font-medium text-gray-600">出力仕様</p>
           <p>・対象施設：総合体育館（半面A・半面B・全面）</p>
-          <p>・転記データ：ローテーション・固定スケジュール（占有予約は除く）</p>
-          <p>・1シートに最大3件。4件以上は同クラブの2枚目シートに分割</p>
+          <p>・転記データ：ローテーション・固定スケジュールのみ</p>
+          <p>・1シートに最大3件。4件以上は同クラブ名(2)のシートに分割</p>
+          <p>・クラブ×施設種別（半面/全面）ごとに申請書を作成</p>
           <p>・申請者情報は全クラブ統一（一般社団法人たかすスポーツクラブ）</p>
         </div>
       </main>
