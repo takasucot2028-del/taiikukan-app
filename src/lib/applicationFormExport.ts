@@ -264,6 +264,16 @@ function fillSheet(
   return ws
 }
 
+interface TemplateLayout {
+  colWidths: (number | null)[]
+  rowHeights: (number | null)[]
+}
+
+function applyLayoutToSheet(ws: Worksheet, layout: TemplateLayout): void {
+  ws['!cols'] = layout.colWidths.map((w) => (w ? { wch: w } : {}))
+  ws['!rows'] = layout.rowHeights.map((h) => (h ? { hpt: h } : {}))
+}
+
 export async function exportApplicationForm(year: number, month: number, config: AppConfig): Promise<void> {
   const XLSX: XLSXModule = await import('xlsx-js-style')
 
@@ -280,6 +290,11 @@ export async function exportApplicationForm(year: number, month: number, config:
   })
   const templateWs: Worksheet = templateWb.Sheets['原稿']
   if (!templateWs) throw new Error('テンプレートの「原稿」シートが見つかりません')
+
+  // レイアウトJSON（列幅・行高さ）を取得
+  const layoutUrl = `${import.meta.env.BASE_URL}templates/soutai_layout.json`
+  const layoutRes = await fetch(layoutUrl)
+  const layout: TemplateLayout = layoutRes.ok ? await layoutRes.json() : { colWidths: [], rowHeights: [] }
 
   const allEntries = buildAllEntries(year, month, config)
   const groupMap = groupEntries(allEntries)
@@ -311,6 +326,7 @@ export async function exportApplicationForm(year: number, month: number, config:
       const sheetName = sanitizeSheetName(rawName)
 
       const ws = fillSheet(templateWs, clubName, facilityType, pageEntries, entries, outputDateStr)
+      applyLayoutToSheet(ws, layout)
       XLSX.utils.book_append_sheet(wb, ws, sheetName)
     }
   }
