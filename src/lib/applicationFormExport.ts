@@ -264,14 +264,54 @@ function fillSheet(
   return ws
 }
 
+type BorderStyle = 'thin' | 'medium' | 'thick' | 'dashed' | 'dotted' | 'double'
+type BorderSides = Partial<Record<'top' | 'bottom' | 'left' | 'right', BorderStyle>>
+
 interface TemplateLayout {
-  colWidths: (number | null)[]
-  rowHeights: (number | null)[]
+  colWidths: Record<string, number>
+  rowHeights: Record<string, number>
+  borders: Record<string, BorderSides>
+}
+
+function colLetterToIndex(col: string): number {
+  col = col.toUpperCase()
+  if (col.length === 1) return col.charCodeAt(0) - 65
+  return 26 + (col.charCodeAt(1) - 65)
+}
+
+function xlsxBorderSide(style: BorderStyle) {
+  return { style, color: { rgb: 'FF000000' } }
 }
 
 function applyLayoutToSheet(ws: Worksheet, layout: TemplateLayout): void {
-  ws['!cols'] = layout.colWidths.map((w) => (w ? { wch: w } : {}))
-  ws['!rows'] = layout.rowHeights.map((h) => (h ? { hpt: h } : {}))
+  // 列幅: アルファベットキー → インデックス配列
+  const colArr: { wch: number }[] = []
+  for (const [letter, width] of Object.entries(layout.colWidths)) {
+    const idx = colLetterToIndex(letter)
+    colArr[idx] = { wch: width }
+  }
+  ws['!cols'] = colArr
+
+  // 行高さ: 1始まりの数値キー → 0始まりインデックス配列
+  const rowArr: { hpt: number }[] = []
+  for (const [rowStr, height] of Object.entries(layout.rowHeights)) {
+    const idx = parseInt(rowStr, 10) - 1
+    rowArr[idx] = { hpt: height }
+  }
+  ws['!rows'] = rowArr
+
+  // 罫線: セルアドレスごとに既存スタイルへマージ
+  for (const [cellAddr, sides] of Object.entries(layout.borders)) {
+    if (!ws[cellAddr]) ws[cellAddr] = { v: '', t: 's' }
+    const cell = ws[cellAddr]
+    if (!cell.s) cell.s = {}
+    if (!cell.s.border) cell.s.border = {}
+    const b = cell.s.border
+    if (sides.top)    b.top    = xlsxBorderSide(sides.top)
+    if (sides.bottom) b.bottom = xlsxBorderSide(sides.bottom)
+    if (sides.left)   b.left   = xlsxBorderSide(sides.left)
+    if (sides.right)  b.right  = xlsxBorderSide(sides.right)
+  }
 }
 
 export async function exportApplicationForm(year: number, month: number, config: AppConfig): Promise<void> {
