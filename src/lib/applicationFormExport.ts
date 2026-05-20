@@ -118,17 +118,64 @@ function sanitizeSheetName(name: string): string {
   return name.replace(/[:\\/?*[\]]/g, '_').slice(0, 31)
 }
 
-/** 既存セルは v/t のみ上書き（書式・スタイルを保持）、新規セルは最小構成で追加 */
-function setCell(ws: Worksheet, addr: string, value: string | number): void {
+/**
+ * テンプレートシートを完全にディープコピーする。
+ * !merges・!cols・!rows・セルスタイルを全て保持する。
+ */
+function deepCopySheet(ws: Worksheet): Worksheet {
+  const newWs: Worksheet = {}
+  Object.keys(ws).forEach((key) => {
+    if (key === '!ref') {
+      newWs[key] = ws[key]
+    } else if (key === '!merges') {
+      // セル結合を完全コピー
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      newWs[key] = (ws[key] ?? []).map((m: any) => ({
+        s: { r: m.s.r, c: m.s.c },
+        e: { r: m.e.r, c: m.e.c },
+      }))
+    } else if (key === '!cols') {
+      // 列幅を完全コピー
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      newWs[key] = (ws[key] ?? []).map((col: any) => (col ? { ...col } : {}))
+    } else if (key === '!rows') {
+      // 行高さを完全コピー
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      newWs[key] = (ws[key] ?? []).map((row: any) => (row ? { ...row } : {}))
+    } else if (key.startsWith('!')) {
+      // その他メタデータはそのままコピー
+      newWs[key] = ws[key]
+    } else {
+      // セルデータ: スタイル含めてディープコピー
+      const cell = ws[key]
+      if (cell) {
+        newWs[key] = {
+          ...cell,
+          v: cell.v,
+          t: cell.t,
+          s: cell.s ? JSON.parse(JSON.stringify(cell.s)) : undefined,
+        }
+      }
+    }
+  })
+  return newWs
+}
+
+/**
+ * セルに値を書き込む。既存セルのスタイル(s)を保持したまま値だけ更新する。
+ * 新規セルは最小構成で作成。
+ */
+function setCellValue(ws: Worksheet, addr: string, value: string | number): void {
   const t = typeof value === 'number' ? 'n' : 's'
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existing: any = ws[addr]
-  if (existing) {
-    existing.v = value
-    existing.t = t
-    delete existing.w  // 表示キャッシュをクリア
+  if (ws[addr]) {
+    ws[addr] = {
+      ...ws[addr],  // スタイル(s)・その他プロパティを保持
+      v: value,
+      t,
+      w: String(value),
+    }
   } else {
-    ws[addr] = { v: value, t }
+    ws[addr] = { v: value, t, w: String(value) }
   }
 }
 
@@ -138,7 +185,11 @@ function getDominantWeekday(entries: DateEntry[]): string {
   for (const e of entries) {
     counts[e.weekday] = (counts[e.weekday] ?? 0) + 1
   }
-  return Object.entries(counts).reduce((best, [wd, cnt]) => cnt > best[1] ? [wd, cnt] : best, ['', 0])[0]
+  let max = 0, dominant = ''
+  for (const [wd, cnt] of Object.entries(counts)) {
+    if (cnt > max) { max = cnt; dominant = wd }
+  }
+  return dominant
 }
 
 /**
@@ -172,20 +223,21 @@ function fillSheet(
   allGroupEntries: DateEntry[],
   outputDateStr: string,
 ): Worksheet {
-  const ws: Worksheet = JSON.parse(JSON.stringify(templateWs))
+  // deepCopySheet で !merges・!cols・!rows・スタイルを完全保持してコピー
+  const ws: Worksheet = deepCopySheet(templateWs)
 
   // 固定フィールド
-  setCell(ws, 'W15', outputDateStr)
-  setCell(ws, 'T21', clubName)
-  setCell(ws, 'T25', '一般社団法人たかすスポーツクラブ')
-  setCell(ws, 'T28', '鷹栖町南２条４丁目１番２号')
-  setCell(ws, 'Y31', '0166-87-4291')
-  setCell(ws, 'R38', facilityType === '全面' ? '全' : '半')
-  setCell(ws, 'H43', '定期練習')
+  setCellValue(ws, 'W15', outputDateStr)
+  setCellValue(ws, 'T21', clubName)
+  setCellValue(ws, 'T25', '一般社団法人たかすスポーツクラブ')
+  setCellValue(ws, 'T28', '鷹栖町南２条４丁目１番２号')
+  setCellValue(ws, 'Y31', '0166-87-4291')
+  setCellValue(ws, 'R38', facilityType === '全面' ? '全' : '半')
+  setCellValue(ws, 'H43', '定期練習')
 
-  // 定期利用記入欄: グループ全体で最多曜日 → Y64（V64:X64="(毎週" の直後）
+  // 定期利用記入欄: グループ全体で最多曜日 → Y64（V64:X64="(毎週" の直後、Y64:AB64結合）
   const dominantWd = getDominantWeekday(allGroupEntries)
-  if (dominantWd) setCell(ws, 'Y64', dominantWd)
+  if (dominantWd) setCellValue(ws, 'Y64', dominantWd)
 
   // 日時行（最大3件）
   const DATE_ROWS = [
@@ -199,14 +251,14 @@ function fillSheet(
     const dr = DATE_ROWS[i]
     const { era, eraYear } = toWareki(e.year)
 
-    setCell(ws, dr.yr, `${era}${eraYear}`)              // "令和8"
-    setCell(ws, dr.mo, e.month)                          // 5
-    setCell(ws, dr.dy, e.day)                            // 3
-    setCell(ws, dr.wd, `( ${e.weekday} ）`)              // "( 日 ）"
-    setCell(ws, dr.sH, e.startH)                         // 14
-    setCell(ws, dr.sM, String(e.startM).padStart(2, '0')) // "00"
-    setCell(ws, dr.eH, e.endH)                           // 17
-    setCell(ws, dr.eM, String(e.endM).padStart(2, '0'))  // "00"
+    setCellValue(ws, dr.yr, `${era}${eraYear}`)              // "令和8"
+    setCellValue(ws, dr.mo, e.month)                          // 5
+    setCellValue(ws, dr.dy, e.day)                            // 3
+    setCellValue(ws, dr.wd, `( ${e.weekday} ）`)              // "( 日 ）"
+    setCellValue(ws, dr.sH, e.startH)                         // 14
+    setCellValue(ws, dr.sM, String(e.startM).padStart(2, '0')) // "00"
+    setCellValue(ws, dr.eH, e.endH)                           // 17
+    setCellValue(ws, dr.eM, String(e.endM).padStart(2, '0'))  // "00"
   }
 
   return ws
@@ -220,7 +272,12 @@ export async function exportApplicationForm(year: number, month: number, config:
   const response = await fetch(templateUrl)
   if (!response.ok) throw new Error(`テンプレート取得失敗: ${response.status}`)
   const buffer = await response.arrayBuffer()
-  const templateWb: XLSXModule = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+  const templateWb: XLSXModule = XLSX.read(new Uint8Array(buffer), {
+    type: 'array',
+    cellStyles: true,   // スタイル情報を読み込む
+    cellFormulas: true, // 数式を保持
+    sheetStubs: true,   // 空セルもスタブとして保持
+  })
   const templateWs: Worksheet = templateWb.Sheets['原稿']
   if (!templateWs) throw new Error('テンプレートの「原稿」シートが見つかりません')
 
