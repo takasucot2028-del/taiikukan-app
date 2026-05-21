@@ -11,7 +11,6 @@ import { AdminSettings } from './pages/admin/AdminSettings'
 import { AdminSchedule } from './pages/admin/AdminSchedule'
 import { AdminLogs } from './pages/admin/AdminLogs'
 import { AdminNotifications } from './pages/admin/AdminNotifications'
-import { AdminApplicationForm } from './pages/admin/AdminApplicationForm'
 import { PrintSchedule } from './pages/PrintSchedule'
 
 function RootRedirect() {
@@ -56,7 +55,6 @@ export default function App() {
         <Route path="/admin/schedule"        element={<RequireAdmin><AdminSchedule /></RequireAdmin>} />
         <Route path="/admin/logs"            element={<RequireAdmin><AdminLogs /></RequireAdmin>} />
         <Route path="/admin/notifications"    element={<RequireAdmin><AdminNotifications /></RequireAdmin>} />
-        <Route path="/admin/application-form" element={<RequireAdmin><AdminApplicationForm /></RequireAdmin>} />
 
         <Route path="/print" element={<PrintSchedule />} />
 
