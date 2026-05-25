@@ -1,5 +1,5 @@
 import { getDay } from 'date-fns'
-import type { AppConfig, SlotEntry, DayType, DayPattern, Rotation, Reservation } from '../types'
+import type { AppConfig, SlotEntry, DayType, DayPattern, Rotation, Reservation, SchoolEventType } from '../types'
 
 function isSummer(month: number): boolean {
   return month >= 5 && month <= 10
@@ -8,7 +8,7 @@ function isSummer(month: number): boolean {
 export function getDayType(
   dateStr: string,
   config: AppConfig,
-): { type: DayType; eventName?: string; scheduleType?: 'weekday' | 'rotation' } {
+): { type: DayType; eventName?: string; scheduleType?: SchoolEventType } {
   const schoolEvent = config.schoolEvents.find((e) => e.date === dateStr)
   if (schoolEvent) {
     console.log(`[scheduleLogic] 学校行事 ${dateStr}: name=${schoolEvent.name} type=${schoolEvent.type ?? 'weekday(default)'}`)
@@ -28,7 +28,8 @@ export function getDayType(
   return { type: 'weekday' }
 }
 
-/** 通常土曜（rotation学校行事を除く）の月内連番（0-indexed） */
+/** 夏季土曜ローテーション用カウンター（0-indexed）
+ *  summerSat指定日 + rotation指定の土曜 を除いた通常土曜を数える */
 function getNthSatInMonth(dateStr: string, config: AppConfig): number {
   const [year, month, day] = dateStr.split('-').map(Number)
   let count = 0
@@ -37,13 +38,88 @@ function getNthSatInMonth(dateStr: string, config: AppConfig): number {
     if (dow !== 6) continue
     const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const ev = config.schoolEvents.find((e) => e.date === ds)
-    if (ev?.type === 'rotation') continue  // 休暇ローテーション枠
+    // summerSat/winterSat/rotation（土曜）は専用カウンターで扱うのでスキップ
+    if (ev?.type === 'summerSat' || ev?.type === 'winterSat') continue
+    if (ev?.type === 'rotation' && dow === 6) continue
     count++
   }
   return count
 }
 
-/** 日曜・祝日（rotation日曜を含む・rotation平日/土曜を除く）の月内連番（0-indexed） */
+/** summerSat 指定日の月内連番（0-indexed） */
+function getNthSummerSatInMonth(dateStr: string, config: AppConfig): number {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  let count = 0
+  for (let d = 1; d < day; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const ev = config.schoolEvents.find((e) => e.date === ds)
+    if (ev?.type === 'summerSat') count++
+  }
+  return count
+}
+
+/** summerSun 指定日の月内連番（0-indexed） */
+function getNthSummerSunInMonth(dateStr: string, config: AppConfig): number {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  let count = 0
+  for (let d = 1; d < day; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const ev = config.schoolEvents.find((e) => e.date === ds)
+    if (ev?.type === 'summerSun') count++
+  }
+  return count
+}
+
+/** summerVac 指定日の月内連番（0-indexed） */
+function getNthSummerVacInMonth(dateStr: string, config: AppConfig): number {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  let count = 0
+  for (let d = 1; d < day; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const ev = config.schoolEvents.find((e) => e.date === ds)
+    if (ev?.type === 'summerVac') count++
+  }
+  return count
+}
+
+/** winterSat 指定日の月内連番（0-indexed） */
+function getNthWinterSatInMonth(dateStr: string, config: AppConfig): number {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  let count = 0
+  for (let d = 1; d < day; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const ev = config.schoolEvents.find((e) => e.date === ds)
+    if (ev?.type === 'winterSat') count++
+  }
+  return count
+}
+
+/** winterSun 指定日の月内連番（0-indexed） */
+function getNthWinterSunInMonth(dateStr: string, config: AppConfig): number {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  let count = 0
+  for (let d = 1; d < day; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const ev = config.schoolEvents.find((e) => e.date === ds)
+    if (ev?.type === 'winterSun') count++
+  }
+  return count
+}
+
+/** winterVac 指定日の月内連番（0-indexed） */
+function getNthWinterVacInMonth(dateStr: string, config: AppConfig): number {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  let count = 0
+  for (let d = 1; d < day; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const ev = config.schoolEvents.find((e) => e.date === ds)
+    if (ev?.type === 'winterVac') count++
+  }
+  return count
+}
+
+/** 日曜・祝日（summerSun/winterSun/rotation日曜を含む）の月内連番（0-indexed）
+ *  summerSat/winterSat/rotation（平日・土曜）は除外 */
 function getNthSunInMonth(dateStr: string, config: AppConfig): number {
   const [year, month, day] = dateStr.split('-').map(Number)
   let count = 0
@@ -52,14 +128,16 @@ function getNthSunInMonth(dateStr: string, config: AppConfig): number {
     const dow = getDay(new Date(year, month - 1, d))
     const ev = config.schoolEvents.find((e) => e.date === ds)
     const isHoliday = config.holidays.some((h) => h.date === ds)
-    // rotation平日・土曜は休暇ローテーション扱いなのでスキップ。rotation日曜は通常日曜として数える
+    // summerSat/winterSat/rotation（土曜・平日）は別カウンターなのでスキップ
+    if (ev?.type === 'summerSat' || ev?.type === 'winterSat') continue
+    if (ev?.type === 'summerVac' || ev?.type === 'winterVac') continue
     if (ev?.type === 'rotation' && dow !== 0) continue
     if (dow === 0 || isHoliday) count++
   }
   return count
 }
 
-/** rotation学校行事（日曜を除く）の月内連番（0-indexed） */
+/** rotation学校行事（後方互換・日曜を除く）の月内連番（0-indexed） */
 function getNthVacInMonth(dateStr: string, config: AppConfig): number {
   const [year, month, day] = dateStr.split('-').map(Number)
   let count = 0
@@ -67,7 +145,6 @@ function getNthVacInMonth(dateStr: string, config: AppConfig): number {
     const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const dow = getDay(new Date(year, month - 1, d))
     const ev = config.schoolEvents.find((e) => e.date === ds)
-    // rotation日曜は日曜ローテーション扱いなのでカウントしない
     if (ev?.type === 'rotation' && dow !== 0) count++
   }
   return count
@@ -119,8 +196,8 @@ export function getDaySchedule(
   const summer = isSummer(month)
   const dow = getDay(new Date(dateStr + 'T00:00:00'))
 
-  // 平日 or 学校行事（平日スケジュール）
-  if (type === 'weekday' || (type === 'schoolEvent' && scheduleType !== 'rotation')) {
+  // 平日（学校行事なし）
+  if (type === 'weekday') {
     if (!config.weekdaySchedule) return []
     const keyMap: Record<number, keyof NonNullable<AppConfig['weekdaySchedule']>> = {
       1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday',
@@ -130,25 +207,84 @@ export function getDaySchedule(
     return slots.map((s) => ({ ...s, timeSlot: s.timeSlot || '16:00〜18:00' }))
   }
 
-  // 学校行事（rotation）: 日曜は通常日曜ローテーション、平日・土曜は休暇ローテーション
-  if (type === 'schoolEvent' && scheduleType === 'rotation') {
-    if (dow === 0) {
-      // 休暇中の日曜 → 夏季/冬季日曜ローテーション（日曜カウンター使用）
-      const rotation = summer ? config.sundayRotation : config.winterSundayRotation
-      if (!rotation) return []
-      const nth = getNthSunInMonth(dateStr, config)
-      const slots = getRotationPattern(rotation.patterns, rotation.startIndex, nth)
-      const result = applyNexusBcRule(slots)
-      const rotNum = Math.max(rotation.patterns.filter((p) => p.length > 0).length, 1)
-      const patIdx = ((rotation.startIndex + nth) % rotNum) + 1
-      console.log(`[schedule] ${summer ? '夏季' : '冬季'}日曜ローテーション（休暇中日曜）${dateStr}: ${nth + 1}番目 パターン${patIdx} → ${result.length}スロット`)
-      return result
+  // 学校行事 → scheduleType に応じてローテーションを選択
+  if (type === 'schoolEvent') {
+    switch (scheduleType) {
+      case 'weekday': {
+        if (!config.weekdaySchedule) return []
+        const keyMap: Record<number, keyof NonNullable<AppConfig['weekdaySchedule']>> = {
+          1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday',
+        }
+        const key = keyMap[dow]
+        const slots = key ? (config.weekdaySchedule[key] ?? []) : []
+        return slots.map((s) => ({ ...s, timeSlot: s.timeSlot || '16:00〜18:00' }))
+      }
+      case 'summerSat': {
+        const rotation = config.saturdayRotation
+        if (!rotation) return []
+        const nth = getNthSummerSatInMonth(dateStr, config)
+        return applyRotation(rotation, nth, '夏季土曜ローテーション', dateStr)
+      }
+      case 'summerSun': {
+        const rotation = config.sundayRotation
+        if (!rotation) return []
+        const nth = getNthSummerSunInMonth(dateStr, config)
+        const slots = getRotationPattern(rotation.patterns, rotation.startIndex, nth)
+        const result = applyNexusBcRule(slots)
+        const rotNum = Math.max(rotation.patterns.filter((p) => p.length > 0).length, 1)
+        const patIdx = ((rotation.startIndex + nth) % rotNum) + 1
+        console.log(`[schedule] 夏季日曜ローテーション ${dateStr}: ${nth + 1}番目 パターン${patIdx} → ${result.length}スロット`)
+        return result
+      }
+      case 'summerVac': {
+        const rotation = config.summerVacationRotation
+        if (!rotation) return []
+        const nth = getNthSummerVacInMonth(dateStr, config)
+        return applyRotation(rotation, nth, '夏季休暇ローテーション', dateStr)
+      }
+      case 'winterSat': {
+        const rotation = config.winterSaturdayRotation
+        if (!rotation) return []
+        const nth = getNthWinterSatInMonth(dateStr, config)
+        return applyRotation(rotation, nth, '冬季土曜ローテーション', dateStr)
+      }
+      case 'winterSun': {
+        const rotation = config.winterSundayRotation
+        if (!rotation) return []
+        const nth = getNthWinterSunInMonth(dateStr, config)
+        const slots = getRotationPattern(rotation.patterns, rotation.startIndex, nth)
+        const result = applyNexusBcRule(slots)
+        const rotNum = Math.max(rotation.patterns.filter((p) => p.length > 0).length, 1)
+        const patIdx = ((rotation.startIndex + nth) % rotNum) + 1
+        console.log(`[schedule] 冬季日曜ローテーション ${dateStr}: ${nth + 1}番目 パターン${patIdx} → ${result.length}スロット`)
+        return result
+      }
+      case 'winterVac': {
+        const rotation = config.winterVacationRotation
+        if (!rotation) return []
+        const nth = getNthWinterVacInMonth(dateStr, config)
+        return applyRotation(rotation, nth, '冬季休暇ローテーション', dateStr)
+      }
+      case 'rotation':
+      default: {
+        // 後方互換: rotation は曜日に応じて夏季/冬季の日曜/休暇ローテーションを適用
+        if (dow === 0) {
+          const rotation = summer ? config.sundayRotation : config.winterSundayRotation
+          if (!rotation) return []
+          const nth = getNthSunInMonth(dateStr, config)
+          const slots = getRotationPattern(rotation.patterns, rotation.startIndex, nth)
+          const result = applyNexusBcRule(slots)
+          const rotNum = Math.max(rotation.patterns.filter((p) => p.length > 0).length, 1)
+          const patIdx = ((rotation.startIndex + nth) % rotNum) + 1
+          console.log(`[schedule] ${summer ? '夏季' : '冬季'}日曜ローテーション（rotation後方互換）${dateStr}: ${nth + 1}番目 パターン${patIdx} → ${result.length}スロット`)
+          return result
+        }
+        const rotation = summer ? config.summerVacationRotation : config.winterVacationRotation
+        if (!rotation) return []
+        const nth = getNthVacInMonth(dateStr, config)
+        return applyRotation(rotation, nth, summer ? '夏季休暇ローテーション' : '冬季休暇ローテーション', dateStr)
+      }
     }
-    // 休暇中の平日・土曜 → 夏季/冬季休暇ローテーション
-    const rotation = summer ? config.summerVacationRotation : config.winterVacationRotation
-    if (!rotation) return []
-    const nth = getNthVacInMonth(dateStr, config)
-    return applyRotation(rotation, nth, summer ? '夏季休暇ローテーション' : '冬季休暇ローテーション', dateStr)
   }
 
   // 土曜 → 夏季/冬季土曜ローテーション

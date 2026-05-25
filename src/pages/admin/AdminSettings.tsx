@@ -3,7 +3,7 @@ import { useAppStore } from '../../store'
 import { gasApi } from '../../lib/gasApi'
 import { useConfig } from '../../hooks/useReservations'
 import { AdminNav } from '../../components/admin/AdminNav'
-import type { AppConfig, Rotation, Club, Holiday, SchoolEvent, SlotEntry } from '../../types'
+import type { AppConfig, Rotation, Club, Holiday, SchoolEvent, SchoolEventType, SlotEntry } from '../../types'
 
 const TABS = ['クラブ', '祝日', '学校行事', '平日スケジュール', 'ローテーション', '開始番号'] as const
 type Tab = typeof TABS[number]
@@ -114,7 +114,7 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
   const [events, setEvents] = useState<SchoolEvent[]>(config.schoolEvents)
   const [date, setDate] = useState('')
   const [name, setName] = useState('')
-  const [scheduleType, setScheduleType] = useState<'weekday' | 'rotation'>('weekday')
+  const [scheduleType, setScheduleType] = useState<SchoolEventType>('weekday')
   const [editingKey, setEditingKey] = useState<string | null>(null) // "date|name" で編集対象を識別
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -134,7 +134,7 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
   const startEdit = (e: SchoolEvent) => {
     setDate(e.date)
     setName(e.name)
-    setScheduleType(e.type ?? 'weekday')
+    setScheduleType(e.type ?? 'weekday' as SchoolEventType)
     setEditingKey(`${e.date}|${e.name}`)
   }
 
@@ -164,8 +164,23 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
               <span className="text-sm text-gray-700 flex items-center gap-2 min-w-0">
                 <span className="shrink-0">{e.date}</span>
                 <span className="truncate">{e.name}</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${e.type === 'rotation' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {e.type === 'rotation' ? '休日' : '平日'}
+                <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${
+                  e.type === 'summerSat' ? 'bg-cyan-100 text-cyan-700' :
+                  e.type === 'summerSun' ? 'bg-orange-100 text-orange-700' :
+                  e.type === 'summerVac' ? 'bg-green-100 text-green-700' :
+                  e.type === 'winterSat' ? 'bg-indigo-100 text-indigo-800' :
+                  e.type === 'winterSun' ? 'bg-amber-100 text-amber-800' :
+                  e.type === 'winterVac' ? 'bg-purple-100 text-purple-700' :
+                  e.type === 'rotation'  ? 'bg-orange-100 text-orange-700' :
+                  'bg-blue-100 text-blue-700'
+                }`}>
+                  {e.type === 'summerSat' ? '夏土' :
+                   e.type === 'summerSun' ? '夏日' :
+                   e.type === 'summerVac' ? '夏休' :
+                   e.type === 'winterSat' ? '冬土' :
+                   e.type === 'winterSun' ? '冬日' :
+                   e.type === 'winterVac' ? '冬休' :
+                   e.type === 'rotation'  ? '休日' : '平日'}
                 </span>
               </span>
               <span className="flex gap-1 shrink-0 ml-2">
@@ -189,17 +204,21 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="行事名"
             className="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="radio" name="scheduleType" value="weekday"
-              checked={scheduleType === 'weekday'} onChange={() => setScheduleType('weekday')} />
-            <span>平日スケジュール（通常授業・行事など）</span>
-          </label>
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="radio" name="scheduleType" value="rotation"
-              checked={scheduleType === 'rotation'} onChange={() => setScheduleType('rotation')} />
-            <span>休日ローテーション（夏休み・冬休みなど）</span>
-          </label>
+        <div className="text-sm">
+          <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as SchoolEventType)}
+            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+            <option value="weekday">平日スケジュール</option>
+            <optgroup label="夏季（5〜10月）">
+              <option value="summerSat">夏季土曜ローテーション</option>
+              <option value="summerSun">夏季日曜ローテーション</option>
+              <option value="summerVac">夏季休暇ローテーション</option>
+            </optgroup>
+            <optgroup label="冬季（11〜4月）">
+              <option value="winterSat">冬季土曜ローテーション</option>
+              <option value="winterSun">冬季日曜ローテーション</option>
+              <option value="winterVac">冬季休暇ローテーション</option>
+            </optgroup>
+          </select>
         </div>
         <div className="flex gap-2">
           {editingKey && (

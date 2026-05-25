@@ -42,10 +42,16 @@ export interface Holiday {
   name: string
 }
 
+export type SchoolEventType =
+  'weekday' |
+  'summerSat' | 'summerSun' | 'summerVac' |
+  'winterSat' | 'winterSun' | 'winterVac' |
+  'rotation'  // 後方互換
+
 export interface SchoolEvent {
   date: string
   name: string
-  type?: 'weekday' | 'rotation'  // 省略時は平日扱い
+  type?: SchoolEventType  // 省略時は平日扱い
 }
 
 // 施設・時間帯ごとの使用1コマ

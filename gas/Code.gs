@@ -120,7 +120,9 @@ function getConfig() {
   for (var r = SCHEDULE_ROWS.schoolEvents.start; r <= Math.min(SCHEDULE_ROWS.schoolEvents.end, lastRow); r++) {
     var d = data[r - 1][0], n = String(data[r - 1][1]).trim();
     var t = data[r - 1][2] ? String(data[r - 1][2]).trim() : '';
-    if (d && n) schoolEvents.push({ date: formatDate_(d), name: n, type: (t === 'rotation' ? 'rotation' : 'weekday') });
+    var validTypes = ['weekday','summerSat','summerSun','summerVac','winterSat','winterSun','winterVac','rotation'];
+    var evType = validTypes.indexOf(t) !== -1 ? t : 'weekday';
+    if (d && n) schoolEvents.push({ date: formatDate_(d), name: n, type: evType });
   }
 
   // ---- 管理者PIN（ラベルスキャン：行番号固定不要） ----
