@@ -30,18 +30,18 @@ function normalizeConfig(raw: Record<string, unknown>): AppConfig {
     saturdayRotation: normalizeRotation(rawSat),
     // 夏季日曜
     sundayRotation:   normalizeRotation(rawSun),
-    // 夏季休暇（新規フィールド）
-    summerVacationRotation: (raw.summerVacationRotation as Rotation | null) ?? null,
+    // 夏季休暇
+    summerVacationRotation: normalizeRotation(raw.summerVacationRotation as RawRotation | null),
     // 冬季土曜：新形式 winterSaturdayRotation、旧形式 saturdayRotation.winterPatterns
     winterSaturdayRotation:
-      (raw.winterSaturdayRotation as Rotation | null) ??
+      normalizeRotation(raw.winterSaturdayRotation as RawRotation | null) ??
       normalizeRotation(rawSat, rawSat?.winterPatterns),
     // 冬季日曜
     winterSundayRotation:
-      (raw.winterSundayRotation as Rotation | null) ??
+      normalizeRotation(raw.winterSundayRotation as RawRotation | null) ??
       normalizeRotation(rawSun, rawSun?.winterPatterns),
-    // 冬季休暇（新規フィールド）
-    winterVacationRotation: (raw.winterVacationRotation as Rotation | null) ?? null,
+    // 冬季休暇
+    winterVacationRotation: normalizeRotation(raw.winterVacationRotation as RawRotation | null),
   }
 }
 

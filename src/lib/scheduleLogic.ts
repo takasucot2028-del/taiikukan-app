@@ -209,6 +209,21 @@ export function getDaySchedule(
 
   // 学校行事 → scheduleType に応じてローテーションを選択
   if (type === 'schoolEvent') {
+    const _se = config.schoolEvents.find((e) => e.date === dateStr)
+    console.log(`[getDaySchedule] 学校行事 ${dateStr}:`, {
+      scheduleType,
+      schoolEventType: _se?.type,
+      isSummer: summer,
+      dow,
+      rotations: {
+        saturday: !!config.saturdayRotation,
+        sunday: !!config.sundayRotation,
+        summerVac: !!config.summerVacationRotation,
+        winterSat: !!config.winterSaturdayRotation,
+        winterSun: !!config.winterSundayRotation,
+        winterVac: !!config.winterVacationRotation,
+      },
+    })
     switch (scheduleType) {
       case 'weekday': {
         if (!config.weekdaySchedule) return []
@@ -220,8 +235,9 @@ export function getDaySchedule(
         return slots.map((s) => ({ ...s, timeSlot: s.timeSlot || '16:00〜18:00' }))
       }
       case 'summerSat': {
+        console.log(`[getDaySchedule] matchedCase: summerSat ${dateStr}`)
         const rotation = config.saturdayRotation
-        if (!rotation) return []
+        if (!rotation) { console.warn(`[getDaySchedule] saturdayRotation is null for ${dateStr}`); return [] }
         const nth = getNthSummerSatInMonth(dateStr, config)
         return applyRotation(rotation, nth, '夏季土曜ローテーション', dateStr)
       }
@@ -267,6 +283,7 @@ export function getDaySchedule(
       }
       case 'rotation':
       default: {
+        console.log(`[getDaySchedule] matchedCase: rotation/default ${dateStr} (scheduleType=${scheduleType})`)
         // 後方互換: rotation は曜日に応じて夏季/冬季の日曜/休暇ローテーションを適用
         if (dow === 0) {
           const rotation = summer ? config.sundayRotation : config.winterSundayRotation
@@ -280,7 +297,7 @@ export function getDaySchedule(
           return result
         }
         const rotation = summer ? config.summerVacationRotation : config.winterVacationRotation
-        if (!rotation) return []
+        if (!rotation) { console.warn(`[getDaySchedule] ${summer ? 'summerVacationRotation' : 'winterVacationRotation'} is null for ${dateStr}`); return [] }
         const nth = getNthVacInMonth(dateStr, config)
         return applyRotation(rotation, nth, summer ? '夏季休暇ローテーション' : '冬季休暇ローテーション', dateStr)
       }
