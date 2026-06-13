@@ -50,6 +50,7 @@ const GAS_URL = import.meta.env.VITE_GAS_URL ?? 'YOUR_GAS_WEBAPP_URL'
 async function gasGet<T>(action: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(GAS_URL)
   url.searchParams.set('action', action)
+  url.searchParams.set('_t', Date.now().toString())  // GASキャッシュ無効化
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
   const res = await fetch(url.toString(), { method: 'GET', redirect: 'follow' })
   const text = await res.text()
@@ -176,7 +177,11 @@ export const gasApi = {
 
   /** 設定を保存する */
   saveConfig: async (config: AppConfig & { satStartIndex?: number; sunStartIndex?: number }) => {
-    const result = await gasPost<{ success: boolean }>('saveConfig', { config })
+    const result = await gasPost<{ success: boolean; error?: string }>('saveConfig', { config })
+    console.log('[gasApi] saveConfig GASレスポンス:', result)
+    if (!result.success) {
+      throw new Error(result.error ?? 'GAS saveConfig が失敗しました')
+    }
     clearCache('config')
     return result
   },

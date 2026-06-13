@@ -122,10 +122,14 @@ function SchoolEventTab({ config, onSave }: { config: AppConfig; onSave: (c: App
   const doSave = async (updated: SchoolEvent[]) => {
     setSaving(true)
     try {
+      console.log('[学校行事保存] リクエスト送信:', updated.map((e) => ({ date: e.date, name: e.name, type: e.type })))
       await onSave({ ...config, schoolEvents: updated })
       setEvents(updated)
       setMsg('保存しました')
-    } catch { setMsg('保存に失敗しました') }
+    } catch (err) {
+      console.error('[学校行事保存] エラー:', err)
+      setMsg('保存に失敗しました')
+    }
     finally { setSaving(false); setTimeout(() => setMsg(''), 3000) }
   }
 

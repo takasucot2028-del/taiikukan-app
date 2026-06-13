@@ -79,10 +79,11 @@ function doPost(e) {
       case 'sendNotification':
         return createResponse(sendNotification(body.title, body.body));
       default:
-        return createResponse({ error: 'Unknown action: ' + action });
+        return createResponse({ success: false, error: 'Unknown action: ' + action });
     }
   } catch (err) {
-    return createResponse({ error: err.message });
+    Logger.log('doPost エラー: ' + err.message + ' / stack: ' + err.stack);
+    return createResponse({ success: false, error: err.message });
   }
 }
 
@@ -450,13 +451,17 @@ function saveConfig(config) {
   });
 
   // 学校行事（A=日付, B=行事名, C=種別）
+  var schoolEvents = config.schoolEvents || [];
+  Logger.log('学校行事保存: 件数=' + schoolEvents.length + ' データ=' + JSON.stringify(schoolEvents.slice(0, 10)));
   var evRange = SCHEDULE_ROWS.schoolEvents.end - SCHEDULE_ROWS.schoolEvents.start + 1;
   sheet.getRange(SCHEDULE_ROWS.schoolEvents.start, 1, evRange, 3).clearContent();
-  (config.schoolEvents || []).forEach(function(e, i) {
+  schoolEvents.forEach(function(e, i) {
     if (i < evRange) {
       sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 1).setValue(new Date(e.date));
       sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 2).setValue(e.name);
-      sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 3).setValue(e.type || 'weekday');
+      var typeToSave = e.type || 'weekday';
+      sheet.getRange(SCHEDULE_ROWS.schoolEvents.start + i, 3).setValue(typeToSave);
+      if (i < 5) Logger.log('  [' + i + '] date=' + e.date + ' name=' + e.name + ' type=' + typeToSave);
     }
   });
 
