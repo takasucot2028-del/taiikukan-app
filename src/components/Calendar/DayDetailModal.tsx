@@ -5,12 +5,12 @@ import { Modal } from '../common/Modal'
 import { ReservationForm } from '../Reservation/ReservationForm'
 import { ScheduleEntryForm } from '../Reservation/ScheduleEntryForm'
 import type { Reservation, SlotEntry, AppConfig } from '../../types'
-import { getDayType } from '../../lib/scheduleLogic'
+import { getDayType, isVacationDay, VACATION_TIME_SLOTS, WEEKEND_TIME_SLOTS } from '../../lib/scheduleLogic'
 import { getClubColor } from '../../lib/clubColors'
 import { gasApi } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
 
-const SLOT_ORDER = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00', '16:00〜18:00', '終日']
+const SLOT_ORDER = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00', '8:00〜10:30', '10:30〜13:00', '13:00〜15:30', '16:00〜18:00', '終日']
 
 function sortSlots(slots: string[]): string[] {
   return [...slots].sort((a, b) => {
@@ -28,9 +28,10 @@ function getDefaultTimeSlots(dateStr: string, config: AppConfig | null): string[
     const dow = getDay(new Date(dateStr + 'T00:00:00'))
     return (dow === 0 || dow === 6) ? ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00'] : ['16:00〜18:00']
   }
+  if (isVacationDay(dateStr, config)) return [...VACATION_TIME_SLOTS]
   const { type } = getDayType(dateStr, config)
   if (type === 'weekday' || type === 'schoolEvent') return ['16:00〜18:00']
-  return ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
+  return [...WEEKEND_TIME_SLOTS]
 }
 
 interface Props {
@@ -54,10 +55,13 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
 
   const dayType = config ? getDayType(date, config).type : null
   const dow = getDay(new Date(date + 'T00:00:00'))
+  const isVacation = config ? isVacationDay(date, config) : false
   const isWeekday = dayType
     ? (dayType === 'weekday' || dayType === 'schoolEvent')
     : (dow !== 0 && dow !== 6)
-  const availableTimeSlots = isWeekday ? ['16:00〜18:00'] : ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
+  const availableTimeSlots = isVacation
+    ? [...VACATION_TIME_SLOTS]
+    : isWeekday ? ['16:00〜18:00'] : [...WEEKEND_TIME_SLOTS]
 
   const scheduleEntries = reservations.filter((r) => r.entryType === 'schedule')
   const deletedSlotEntries = reservations.filter((r) => r.entryType === 'deleted_slot')

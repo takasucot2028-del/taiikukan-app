@@ -4,7 +4,7 @@ import { ja } from 'date-fns/locale'
 import { useAppStore } from '../../store'
 import { useReservations, useConfig } from '../../hooks/useReservations'
 import { gasApi } from '../../lib/gasApi'
-import { getDayType, getDaySchedule } from '../../lib/scheduleLogic'
+import { getDayType, getDaySchedule, isVacationDay, VACATION_TIME_SLOTS } from '../../lib/scheduleLogic'
 import { AdminNav } from '../../components/admin/AdminNav'
 import type { Reservation } from '../../types'
 
@@ -118,7 +118,9 @@ export function AdminSchedule() {
         const fill = fillForType[dayType.type] ?? ''
 
         const isWeekend = ['saturday', 'sunday', 'holiday', 'longBreak'].includes(dayType.type)
-        const slots = isWeekend ? WEEKEND_SLOTS : ['16:00〜18:00']
+        const slots = isVacationDay(dateStr, config)
+          ? VACATION_TIME_SLOTS
+          : isWeekend ? WEEKEND_SLOTS : ['16:00〜18:00']
 
         // occupancy reservations for this day
         const occRes = reservations.filter((r) => r.date === dateStr && r.entryType === 'reservation')

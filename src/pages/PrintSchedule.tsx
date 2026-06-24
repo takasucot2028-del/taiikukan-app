@@ -5,7 +5,7 @@ import { ja } from 'date-fns/locale'
 import { useAppStore } from '../store'
 import { useConfig } from '../hooks/useReservations'
 import { gasApi } from '../lib/gasApi'
-import { getDayType, getDaySchedule } from '../lib/scheduleLogic'
+import { getDayType, getDaySchedule, isVacationDay, VACATION_TIME_SLOTS, WEEKEND_TIME_SLOTS } from '../lib/scheduleLogic'
 import { getClubColor } from '../lib/clubColors'
 import type { Reservation } from '../types'
 
@@ -95,9 +95,11 @@ export function PrintSchedule() {
       const dow = format(day, 'EEE', { locale: ja })
       const dateLabel = format(day, 'M/d')
       const isWeekday = type === 'weekday' || (type === 'schoolEvent' && scheduleType !== 'rotation')
-      const timeSlots = isWeekday
-        ? ['16:00〜18:00']
-        : ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
+      const timeSlots = isVacationDay(dateStr, config)
+        ? [...VACATION_TIME_SLOTS]
+        : isWeekday
+          ? ['16:00〜18:00']
+          : [...WEEKEND_TIME_SLOTS]
 
       const baseSlots = getDaySchedule(dateStr, config, printMonth)
       const dayRes = reservations.filter((r: Reservation) => r.date === dateStr)

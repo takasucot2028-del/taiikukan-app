@@ -175,6 +175,11 @@ function applyRotation(
   return result
 }
 
+/** 土日祝ローテーションの時間帯（従来通り維持） */
+export const WEEKEND_TIME_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
+/** 夏季・冬季休暇ローテーションの時間帯（新しい値） */
+export const VACATION_TIME_SLOTS = ['8:00〜10:30', '10:30〜13:00', '13:00〜15:30']
+
 /** 夏季・冬季休暇ローテーションの時間帯を新しい値に変換する
  *  （夏季土曜・日曜・冬季土曜・日曜は従来通り維持） */
 const VAC_TIME_SLOT_MAP: Record<string, string> = {
@@ -184,6 +189,19 @@ const VAC_TIME_SLOT_MAP: Record<string, string> = {
 }
 function applyVacTimeSlots(slots: SlotEntry[]): SlotEntry[] {
   return slots.map((s) => ({ ...s, timeSlot: VAC_TIME_SLOT_MAP[s.timeSlot] ?? s.timeSlot }))
+}
+
+/** その日が夏季・冬季休暇ローテーション日かどうか
+ *  （getDaySchedule で applyVacTimeSlots を適用する日と一致させる） */
+export function isVacationDay(dateStr: string, config: AppConfig): boolean {
+  const { type, scheduleType } = getDayType(dateStr, config)
+  if (type !== 'schoolEvent') return false
+  if (scheduleType === 'summerVac' || scheduleType === 'winterVac') return true
+  // 後方互換: rotation は日曜以外を休暇扱い
+  if (scheduleType === 'rotation') {
+    return getDay(new Date(dateStr + 'T00:00:00')) !== 0
+  }
+  return false
 }
 
 function applyNexusBcRule(slots: SlotEntry[]): SlotEntry[] {
