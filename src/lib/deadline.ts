@@ -3,6 +3,13 @@
  *  締切を過ぎた申請は指導者側では警告のみ（送信は可能）で、
  *  事務局が管理者画面から追加・修正して対応する。 */
 
+/** GASが返す日時（"YYYY-MM-DD HH:mm:ss"）を安全にDate化する。
+ *  Safariはスペース区切りをInvalid Dateにするため、ISO形式へ正規化してから解釈する。 */
+export function parseDateTime(value: string): Date {
+  if (!value) return new Date(NaN)
+  return new Date(value.trim().replace(' ', 'T'))
+}
+
 /** 対象日が属する月の申請締切（前月20日の終わり） */
 export function getApplicationDeadline(targetDate: string): Date {
   const [year, month] = targetDate.split('-').map(Number)

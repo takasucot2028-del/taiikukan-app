@@ -7,7 +7,7 @@ import { useReservations, useConfig } from '../../hooks/useReservations'
 import { gasApi } from '../../lib/gasApi'
 import { AdminNav } from '../../components/admin/AdminNav'
 import { AdminReservationForm } from '../../components/admin/AdminReservationForm'
-import { isAfterDeadline, formatDeadline } from '../../lib/deadline'
+import { isAfterDeadline, formatDeadline, parseDateTime } from '../../lib/deadline'
 import type { Reservation, ReservationStatus } from '../../types'
 
 const STATUS_OPTIONS: ReservationStatus[] = ['申請中', '確定', '却下']
@@ -171,7 +171,7 @@ export function AdminReservations() {
                   <p className="text-sm text-gray-600">{r.clubName}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {isAfterDeadline(r.date, new Date(r.createdAt)) && (
+                  {isAfterDeadline(r.date, parseDateTime(r.createdAt)) && (
                     <span
                       className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800"
                       title={`申請締切（${formatDeadline(r.date)}）後の申請です`}
