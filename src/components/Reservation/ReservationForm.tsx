@@ -2,33 +2,9 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { gasApi } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
+import { RESERVATION_TIME_SLOTS as TIME_SLOTS, RESERVATION_FACILITY_GROUPS as FACILITY_GROUPS } from '../../lib/reservationOptions'
+import { isAfterDeadline, formatDeadline } from '../../lib/deadline'
 import type { TimeSlot, Facility } from '../../types'
-
-const TIME_SLOTS: TimeSlot[] = [
-  '8:00〜11:00',
-  '11:00〜14:00',
-  '14:00〜17:00',
-  '8:00〜10:30',
-  '10:30〜13:00',
-  '13:00〜15:30',
-  '16:00〜18:00',
-  '終日',
-]
-
-const FACILITY_GROUPS: { label: string; options: Facility[] }[] = [
-  {
-    label: '第1体育館',
-    options: ['第1体育館（全面）', '第1体育館 半面A', '第1体育館 半面B', '第1体育館 ステージ'],
-  },
-  {
-    label: '第2体育館',
-    options: ['第2体育館（全面）'],
-  },
-  {
-    label: '総合体育館',
-    options: ['総合体育館（全面）', '総合体育館 半面A', '総合体育館 半面B'],
-  },
-]
 
 interface Props {
   initialDate?: string
@@ -45,14 +21,6 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-
-  const isLateDeadline = () => {
-    const d = new Date(date)
-    const nextMonth = new Date()
-    nextMonth.setDate(20)
-    nextMonth.setMonth(nextMonth.getMonth() + 1)
-    return d > nextMonth
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,8 +53,10 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
           required
           className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        {isLateDeadline() && (
-          <p className="text-amber-600 text-xs mt-1">⚠️ 翌月10日を過ぎた日程の申請です。管理者に確認してください。</p>
+        {isAfterDeadline(date) && (
+          <p className="text-amber-600 text-xs mt-1">
+            ⚠️ 申請締切（{formatDeadline(date)}）を過ぎています。送信はできますが、事務局にご連絡ください。
+          </p>
         )}
       </div>
 

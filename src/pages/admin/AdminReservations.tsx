@@ -6,6 +6,8 @@ import { useAppStore } from '../../store'
 import { useReservations, useConfig } from '../../hooks/useReservations'
 import { gasApi } from '../../lib/gasApi'
 import { AdminNav } from '../../components/admin/AdminNav'
+import { AdminReservationForm } from '../../components/admin/AdminReservationForm'
+import { isAfterDeadline, formatDeadline } from '../../lib/deadline'
 import type { Reservation, ReservationStatus } from '../../types'
 
 const STATUS_OPTIONS: ReservationStatus[] = ['申請中', '確定', '却下']
@@ -58,6 +60,8 @@ export function AdminReservations() {
   const [adminMemoTarget, setAdminMemoTarget] = useState<Reservation | null>(null)
   const [memoText, setMemoText] = useState('')
   const [saving, setSaving] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [editTarget, setEditTarget] = useState<Reservation | null>(null)
 
   const filtered = useMemo(() => {
     return reservations.filter((r) => {
@@ -121,12 +125,22 @@ export function AdminReservations() {
           <option value="all">全クラブ</option>
           {(config?.clubs ?? []).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
-        <span className="ml-auto text-xs text-gray-400 self-center">
+        <span className="ml-auto text-xs text-gray-400 self-center whitespace-nowrap">
           {currentYear}年{currentMonth}月 / {filtered.length}件
         </span>
       </div>
 
       <main className="p-3 max-w-2xl mx-auto space-y-3">
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="w-full bg-blue-600 text-white rounded-xl py-3 font-medium shadow-sm"
+        >
+          ＋ 占有予約を追加（事務局代理登録）
+        </button>
+        <p className="text-xs text-gray-500 -mt-1 px-1">
+          締切後に電話・メール等で受け付けた申請は、ここから追加・修正できます。
+        </p>
+
         {filtered.length === 0 && (
           <div className="bg-white border rounded-xl p-8 text-center">
             <p className="text-3xl mb-3">📋</p>
@@ -156,9 +170,19 @@ export function AdminReservations() {
                   <p className="font-semibold text-gray-800">{safeDateFormat(r.date)}</p>
                   <p className="text-sm text-gray-600">{r.clubName}</p>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASS[r.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                  {r.status}
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isAfterDeadline(r.date, new Date(r.createdAt)) && (
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800"
+                      title={`申請締切（${formatDeadline(r.date)}）後の申請です`}
+                    >
+                      締切後
+                    </span>
+                  )}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASS[r.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {r.status}
+                  </span>
+                </div>
               </div>
               <p className="text-sm text-gray-700 mb-0.5">{r.facility} | {r.timeSlot}</p>
               <p className="text-sm text-gray-600 mb-1">{r.content}</p>
@@ -179,8 +203,14 @@ export function AdminReservations() {
                     className="text-xs border border-gray-400 text-gray-600 rounded px-3 py-1.5 disabled:opacity-50">申請中に戻す</button>
                 )}
                 <button
+                  onClick={() => setEditTarget(r)}
+                  className="text-xs border border-blue-500 text-blue-600 rounded px-3 py-1.5 ml-auto"
+                >
+                  編集
+                </button>
+                <button
                   onClick={() => { setAdminMemoTarget(r); setMemoText(r.adminMemo ?? '') }}
-                  className="text-xs border border-gray-300 text-gray-600 rounded px-3 py-1.5 ml-auto"
+                  className="text-xs border border-gray-300 text-gray-600 rounded px-3 py-1.5"
                 >
                   メモ編集
                 </button>
@@ -189,6 +219,22 @@ export function AdminReservations() {
           )
         })}
       </main>
+
+      {/* 占有予約 追加・編集モーダル */}
+      {(showAddForm || editTarget) && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-4 my-auto">
+            <h3 className="font-bold mb-3">{editTarget ? '占有予約を編集' : '占有予約を追加'}</h3>
+            <AdminReservationForm
+              clubs={config?.clubs ?? []}
+              entry={editTarget}
+              defaultDate={format(new Date(currentYear, currentMonth - 1, 1), 'yyyy-MM-dd')}
+              onSaved={() => { setShowAddForm(false); setEditTarget(null); refetch() }}
+              onCancel={() => { setShowAddForm(false); setEditTarget(null) }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* メモ編集モーダル */}
       {adminMemoTarget && (
