@@ -6,6 +6,7 @@ import { ReservationForm } from '../Reservation/ReservationForm'
 import { ScheduleEntryForm } from '../Reservation/ScheduleEntryForm'
 import type { Reservation, SlotEntry, AppConfig } from '../../types'
 import { getDayType, isVacationDay, VACATION_TIME_SLOTS, WEEKEND_TIME_SLOTS } from '../../lib/scheduleLogic'
+import { timeSlotsOverlap, facilitiesOverlap, findOccupancy } from '../../lib/occupancy'
 import { getClubColor } from '../../lib/clubColors'
 import { gasApi } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
@@ -192,14 +193,18 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
     <Modal title={dateLabel} onClose={onClose}>
       <div className="space-y-3">
         {timeSlots.map((slot) => {
-          const fixedEntries = schedule.filter((s) => s.timeSlot === slot)
+          const confirmedResvForSlot = confirmedResvEntries.filter(
+            (r) => timeSlotsOverlap(r.timeSlot, slot)
+          )
+          // 確定占有に覆われたローテーション枠は表示しない（占有行に集約する）
+          const fixedEntries = schedule.filter(
+            (s) => s.timeSlot === slot &&
+              !confirmedResvForSlot.some((r) => facilitiesOverlap(r.facility, s.facility))
+          )
           const userScheduleForSlot = scheduleEntries.filter((r) => r.timeSlot === slot)
           const deletedSlotsForSlot = deletedSlotEntries.filter((r) => r.timeSlot === slot)
-          const confirmedResvForSlot = confirmedResvEntries.filter(
-            (r) => r.timeSlot === slot || r.timeSlot === '終日'
-          )
           const occupancyForSlot = reservationEntries.filter(
-            (r) => r.status !== '確定' && (r.timeSlot === slot || r.timeSlot === '終日')
+            (r) => r.status !== '確定' && timeSlotsOverlap(r.timeSlot, slot)
           )
 
           // Collect facilities in order: fixed first, then extras from deleted/user-added/confirmed
@@ -243,6 +248,15 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
                             className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-0.5 rounded disabled:opacity-50">削除</button>
                         </span>
                       )}
+                    </div>
+                  )
+                }
+
+                // 他施設の占有（例：全面占有）に覆われた枠は空き扱いにせず、使用不可を明示する
+                if (findOccupancy(slot, facility, confirmedResvForSlot)) {
+                  return (
+                    <div key={facility} className="text-sm bg-red-50 text-red-700 px-2 py-1.5 rounded mb-1">
+                      {facility}：占有のため使用不可
                     </div>
                   )
                 }

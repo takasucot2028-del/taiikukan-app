@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { gasApi } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
+import { getConfirmedOccupancies, findOccupancy } from '../../lib/occupancy'
 import type { Reservation } from '../../types'
 
 const DEFAULT_TIME_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
@@ -34,6 +35,13 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!content.trim()) { setError('活動内容を入力してください'); return }
+
+    // 確定済みの占有予約が入っている枠には登録できない（全面占有は半面も対象）
+    const blocking = findOccupancy(timeSlot, facility, getConfirmedOccupancies(date, allReservations))
+    if (blocking && blocking.id !== entry?.id) {
+      setError(`この枠は「${blocking.clubName}」の占有予約（${blocking.facility} / ${blocking.timeSlot}）が入っているため登録できません。`)
+      return
+    }
     setError('')
 
     if (entry) {
@@ -45,7 +53,7 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
       onSuccess()
       setBgSyncing(true)
       try {
-        await gasApi.updateReservation(entry.id, { timeSlot, facility, content })
+        await gasApi.updateReservation(entry.id, { timeSlot: timeSlot as Reservation['timeSlot'], facility, content })
         onSaved?.()
       } catch {
         setReservations(prev)

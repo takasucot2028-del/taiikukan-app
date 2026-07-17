@@ -7,6 +7,7 @@ import { useConfig } from '../hooks/useReservations'
 import { gasApi } from '../lib/gasApi'
 import { getDayType, getDaySchedule, isVacationDay, VACATION_TIME_SLOTS, WEEKEND_TIME_SLOTS } from '../lib/scheduleLogic'
 import { getClubColor } from '../lib/clubColors'
+import { getConfirmedOccupancies, findOccupancy } from '../lib/occupancy'
 import type { Reservation } from '../types'
 
 const FACILITIES = [
@@ -105,15 +106,19 @@ export function PrintSchedule() {
       const dayRes = reservations.filter((r: Reservation) => r.date === dateStr)
       const deletedSlots = dayRes.filter((r: Reservation) => r.entryType === 'deleted_slot')
       const userSchedule = dayRes.filter((r: Reservation) => r.entryType === 'schedule')
+      const occupancies = getConfirmedOccupancies(dateStr, dayRes)
 
       timeSlots.forEach((slot, idx) => {
         const facilities: Record<string, string> = {}
         FACILITIES.forEach((fac) => {
+          const occ = findOccupancy(slot, fac, occupancies)
           const userEntry = userSchedule.find((r: Reservation) => r.timeSlot === slot && r.facility === fac)
           const deleted = deletedSlots.find((r: Reservation) => r.timeSlot === slot && r.facility === fac)
           const fixed = baseSlots.find((s) => s.timeSlot === slot && s.facility === fac)
 
-          if (userEntry) facilities[fac] = userEntry.clubName
+          // 確定占有は該当施設・時間帯を上書きする（全面占有は半面も、終日は全時間帯も対象）
+          if (occ) facilities[fac] = `【占有】${occ.clubName}`
+          else if (userEntry) facilities[fac] = userEntry.clubName
           else if (deleted) facilities[fac] = ''
           else if (fixed) facilities[fac] = fixed.clubName
           else facilities[fac] = ''

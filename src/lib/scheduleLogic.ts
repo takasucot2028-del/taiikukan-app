@@ -1,4 +1,5 @@
 import { getDay } from 'date-fns'
+import { normalizeFacility, timeSlotsOverlap, facilitiesOverlap } from './occupancy'
 import type { AppConfig, SlotEntry, DayType, DayPattern, Rotation, Reservation, SchoolEventType } from '../types'
 
 function isSummer(month: number): boolean {
@@ -204,11 +205,16 @@ export function isVacationDay(dateStr: string, config: AppConfig): boolean {
   return false
 }
 
+/** NexusBC固定ルール：日曜14:00〜17:00の第1・第2体育館（全面）はNexusBC固定。
+ *  施設名は表記ゆれ（「第1体育館 全面」/「第1体育館（全面）」）があるため正規化して判定する。 */
+const NEXUS_BC_FACILITIES = ['第1体育館（全面）', '第2体育館（全面）']
+const NEXUS_BC_TIME_SLOT = '14:00〜17:00'
+
 function applyNexusBcRule(slots: SlotEntry[]): SlotEntry[] {
   return slots.map((s) => {
     if (
-      s.timeSlot === '14:00〜17:00' &&
-      (s.facility === '第1体育館 全面' || s.facility === '第2体育館 全面')
+      s.timeSlot === NEXUS_BC_TIME_SLOT &&
+      NEXUS_BC_FACILITIES.includes(normalizeFacility(s.facility))
     ) {
       return { ...s, clubName: 'NexusBC' }
     }
@@ -388,8 +394,11 @@ export function getDayClubSummary(
     effective = effective.filter(
       (s) => !deletedSlotItems.some((d) => d.timeSlot === s.timeSlot && d.facility === s.facility)
     )
+    // 確定占有は「終日」や「全面 → 半面」も含めて重なる枠をすべて上書きする
     effective = effective.filter(
-      (s) => !confirmedResvItems.some((r) => r.timeSlot === s.timeSlot && r.facility === s.facility)
+      (s) => !confirmedResvItems.some(
+        (r) => timeSlotsOverlap(r.timeSlot, s.timeSlot) && facilitiesOverlap(r.facility, s.facility)
+      )
     )
     scheduleTypeItems.forEach((r) => {
       effective.push({ timeSlot: r.timeSlot, facility: r.facility, clubName: r.clubName })

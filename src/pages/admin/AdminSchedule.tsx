@@ -5,6 +5,7 @@ import { useAppStore } from '../../store'
 import { useReservations, useConfig } from '../../hooks/useReservations'
 import { gasApi } from '../../lib/gasApi'
 import { getDayType, getDaySchedule, isVacationDay, VACATION_TIME_SLOTS } from '../../lib/scheduleLogic'
+import { getConfirmedOccupancies, findOccupancy, timeSlotsOverlap } from '../../lib/occupancy'
 import { AdminNav } from '../../components/admin/AdminNav'
 import type { Reservation } from '../../types'
 
@@ -33,6 +34,9 @@ function getClubForSlot(
   reservations: Reservation[],
 ): string {
   const dayRes = reservations.filter((r) => r.date === dateStr)
+  // 確定占有は該当施設・時間帯を上書きする（全面占有は半面も、終日は全時間帯も対象）
+  const occ = findOccupancy(timeSlot, facility, getConfirmedOccupancies(dateStr, dayRes))
+  if (occ) return `【占有】${occ.clubName}`
   const deleted = dayRes.find((r) => r.entryType === 'deleted_slot' && r.timeSlot === timeSlot && r.facility === facility)
   if (deleted) return ''
   const userEntry = dayRes.find((r) => r.entryType === 'schedule' && r.timeSlot === timeSlot && r.facility === facility)
@@ -122,13 +126,15 @@ export function AdminSchedule() {
           ? VACATION_TIME_SLOTS
           : isWeekend ? WEEKEND_SLOTS : ['16:00〜18:00']
 
-        // occupancy reservations for this day
-        const occRes = reservations.filter((r) => r.date === dateStr && r.entryType === 'reservation')
+        // occupancy reservations for this day（却下済みは予定表に出さない）
+        const occRes = reservations.filter(
+          (r) => r.date === dateStr && r.entryType === 'reservation' && r.status !== '却下'
+        )
 
         for (let si = 0; si < slots.length; si++) {
           const slot = slots[si]
           const facilityValues = FACILITIES.map((f) => getClubForSlot(dateStr, slot, f, schedule, reservations))
-          const occForSlot = occRes.filter((r) => r.timeSlot === slot || r.timeSlot === '終日')
+          const occForSlot = occRes.filter((r) => timeSlotsOverlap(r.timeSlot, slot))
           const occText = occForSlot.map((r) => `${r.clubName}：${r.content}`).join(' / ')
 
           rows.push([

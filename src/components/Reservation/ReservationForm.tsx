@@ -4,6 +4,7 @@ import { gasApi } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
 import { RESERVATION_TIME_SLOTS as TIME_SLOTS, RESERVATION_FACILITY_GROUPS as FACILITY_GROUPS } from '../../lib/reservationOptions'
 import { isAfterDeadline, formatDeadline } from '../../lib/deadline'
+import { getConfirmedOccupancies, findOccupancy } from '../../lib/occupancy'
 import type { TimeSlot, Facility } from '../../types'
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
-  const { selectedClub, currentYear, currentMonth } = useAppStore()
+  const { selectedClub, currentYear, currentMonth, reservations: allReservations } = useAppStore()
   const [date, setDate] = useState(initialDate ?? format(new Date(currentYear, currentMonth - 1, 1), 'yyyy-MM-dd'))
   const [timeSlot, setTimeSlot] = useState<TimeSlot>('8:00〜11:00')
   const [facility, setFacility] = useState<Facility>('第1体育館（全面）')
@@ -25,6 +26,13 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!content.trim()) { setError('占有内容を入力してください'); return }
+
+    // 既に確定済みの占有が入っている枠は二重に申請できない（全面占有は半面も対象）
+    const blocking = findOccupancy(timeSlot, facility, getConfirmedOccupancies(date, allReservations))
+    if (blocking) {
+      setError(`この枠は既に「${blocking.clubName}」の占有予約（${blocking.facility} / ${blocking.timeSlot}）が確定しています。事務局にご相談ください。`)
+      return
+    }
     setSubmitting(true)
     setError('')
     try {
