@@ -5,7 +5,6 @@ import { useReservations } from '../../hooks/useReservations'
 import { clearCache } from '../../lib/cache'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { AdminNav } from '../../components/admin/AdminNav'
 
 const NAV_ITEMS = [
   { label: '予約申請管理', badge: true,  path: '/admin/reservations',  icon: '📋' },

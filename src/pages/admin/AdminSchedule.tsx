@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { eachDayOfInterval, startOfMonth, endOfMonth, format, getDay } from 'date-fns'
-import { ja } from 'date-fns/locale'
 import { useAppStore } from '../../store'
 import { useReservations, useConfig } from '../../hooks/useReservations'
 import { gasApi } from '../../lib/gasApi'
@@ -48,7 +47,8 @@ function getClubForSlot(
 export function AdminSchedule() {
   const { currentYear, currentMonth, setCurrentMonth, config } = useAppStore()
   const { reservations, refetch } = useReservations()
-  const configResult = useConfig()
+  // 戻り値は使わないが、config をストアへ読み込む副作用が必要なため呼び出す
+  useConfig()
 
   const [year, setYear] = useState(currentYear)
   const [month, setMonth] = useState(currentMonth)

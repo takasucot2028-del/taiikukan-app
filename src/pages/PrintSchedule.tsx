@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { format, eachDayOfInterval, startOfMonth, endOfMonth, getDay } from 'date-fns'
+import { format, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useAppStore } from '../store'
 import { useConfig } from '../hooks/useReservations'

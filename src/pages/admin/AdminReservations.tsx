@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { format, isValid } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useAppStore } from '../../store'
@@ -42,7 +41,6 @@ function isConflict(r: Reservation, all: Reservation[]) {
 }
 
 export function AdminReservations() {
-  const navigate = useNavigate()
   const configResult = useConfig()
   const config = configResult?.config
   const { currentYear, currentMonth, reservations: allReservations, setReservations, setBgSyncing, setSyncError } = useAppStore()

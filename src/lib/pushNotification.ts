@@ -4,11 +4,14 @@ import { gasApi } from './gasApi'
 // GASスクリプトプロパティ VAPID_PUBLIC_KEY に設定した値を入れる
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY ?? ''
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+// applicationServerKey は ArrayBuffer 裏付けの view を要求するため、戻り値を Uint8Array<ArrayBuffer> に固定する
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
   const rawData = window.atob(base64)
-  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
+  const bytes = new Uint8Array(new ArrayBuffer(rawData.length))
+  for (let i = 0; i < rawData.length; i++) bytes[i] = rawData.charCodeAt(i)
+  return bytes
 }
 
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {

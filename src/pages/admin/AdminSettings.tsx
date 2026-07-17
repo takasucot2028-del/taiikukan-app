@@ -3,7 +3,7 @@ import { useAppStore } from '../../store'
 import { gasApi } from '../../lib/gasApi'
 import { useConfig } from '../../hooks/useReservations'
 import { AdminNav } from '../../components/admin/AdminNav'
-import type { AppConfig, Rotation, Club, Holiday, SchoolEvent, SchoolEventType, SlotEntry } from '../../types'
+import type { AppConfig, Rotation, Club, Holiday, SchoolEvent, SchoolEventType, SlotEntry, WeekdaySchedule } from '../../types'
 
 const TABS = ['クラブ', '祝日', '学校行事', '平日スケジュール', 'ローテーション', '開始番号'] as const
 type Tab = typeof TABS[number]
@@ -260,14 +260,16 @@ function WeekdayScheduleTab({ config, onSave }: { config: AppConfig; onSave: (c:
 
   const handleSave = async () => {
     setSaving(true)
-    const newWd: Record<string, SlotEntry[]> = {}
+    const newWd: WeekdaySchedule = {
+      monday: [], tuesday: [], wednesday: [], thursday: [], friday: [],
+    }
     WEEKDAYS.forEach((d) => {
       newWd[d] = FACILITIES
         .filter((f) => grid[d]?.[f])
         .map((f) => ({ timeSlot: '16:00〜18:00', facility: f, clubName: grid[d][f] }))
     })
     try {
-      await onSave({ ...config, weekdaySchedule: newWd as AppConfig['weekdaySchedule'] })
+      await onSave({ ...config, weekdaySchedule: newWd })
       setMsg('保存しました')
     } catch { setMsg('保存に失敗しました') }
     finally { setSaving(false); setTimeout(() => setMsg(''), 3000) }
