@@ -205,6 +205,19 @@ export function isVacationDay(dateStr: string, config: AppConfig): boolean {
   return false
 }
 
+/** その日の表示グリッドの時間帯を返す（全画面共通）。
+ *  休暇ローテーション日=新時間帯 / 平日・平日扱いの行事=夕方枠 /
+ *  土日祝・土日ローテーション扱いの行事（summerSat等）=従来の3枠 */
+export function getDayGridTimeSlots(dateStr: string, config: AppConfig): string[] {
+  if (isVacationDay(dateStr, config)) return [...VACATION_TIME_SLOTS]
+  const { type, scheduleType } = getDayType(dateStr, config)
+  if (type === 'weekday') return ['16:00〜18:00']
+  if (type === 'schoolEvent') {
+    return scheduleType === 'weekday' ? ['16:00〜18:00'] : [...WEEKEND_TIME_SLOTS]
+  }
+  return [...WEEKEND_TIME_SLOTS]
+}
+
 /** NexusBC固定ルール：日曜14:00〜17:00の第1・第2体育館（全面）はNexusBC固定。
  *  施設名は表記ゆれ（「第1体育館 全面」/「第1体育館（全面）」）があるため正規化して判定する。 */
 const NEXUS_BC_FACILITIES = ['第1体育館（全面）', '第2体育館（全面）']

@@ -3,7 +3,7 @@ import { eachDayOfInterval, startOfMonth, endOfMonth, format, getDay } from 'dat
 import { useAppStore } from '../../store'
 import { useReservations, useConfig } from '../../hooks/useReservations'
 import { gasApi } from '../../lib/gasApi'
-import { getDayType, getDaySchedule, isVacationDay, VACATION_TIME_SLOTS } from '../../lib/scheduleLogic'
+import { getDayType, getDaySchedule, getDayGridTimeSlots } from '../../lib/scheduleLogic'
 import { getConfirmedOccupancies, findOccupancy, timeSlotsOverlap } from '../../lib/occupancy'
 import { AdminNav } from '../../components/admin/AdminNav'
 import type { Reservation } from '../../types'
@@ -18,6 +18,7 @@ const FACILITIES = [
   '第1体育館 ステージ',
   '第2体育館（全面）',
   '総合体育館 半面A',
+  '総合体育館 半面B',
   '総合体育館（全面）',
 ]
 
@@ -25,7 +26,6 @@ const DAY_TYPE_LABEL: Record<string, string> = {
   weekday: '平日', saturday: '土曜', sunday: '日曜',
   holiday: '祝日', schoolEvent: '学校行事', longBreak: '長期休暇',
 }
-const WEEKEND_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
 
 function getClubForSlot(
   dateStr: string, timeSlot: string, facility: string,
@@ -121,10 +121,7 @@ export function AdminSchedule() {
         const eventName = dayType.eventName ?? ''
         const fill = fillForType[dayType.type] ?? ''
 
-        const isWeekend = ['saturday', 'sunday', 'holiday', 'longBreak'].includes(dayType.type)
-        const slots = isVacationDay(dateStr, config)
-          ? VACATION_TIME_SLOTS
-          : isWeekend ? WEEKEND_SLOTS : ['16:00〜18:00']
+        const slots = getDayGridTimeSlots(dateStr, config)
 
         // occupancy reservations for this day（却下済みは予定表に出さない）
         const occRes = reservations.filter(

@@ -5,7 +5,7 @@ import { Modal } from '../common/Modal'
 import { ReservationForm } from '../Reservation/ReservationForm'
 import { ScheduleEntryForm } from '../Reservation/ScheduleEntryForm'
 import type { Reservation, SlotEntry, AppConfig } from '../../types'
-import { getDayType, isVacationDay, VACATION_TIME_SLOTS, WEEKEND_TIME_SLOTS } from '../../lib/scheduleLogic'
+import { getDayGridTimeSlots } from '../../lib/scheduleLogic'
 import { timeSlotsOverlap, facilitiesOverlap, findOccupancy } from '../../lib/occupancy'
 import { getClubColor } from '../../lib/clubColors'
 import { gasApi } from '../../lib/gasApi'
@@ -29,10 +29,7 @@ function getDefaultTimeSlots(dateStr: string, config: AppConfig | null): string[
     const dow = getDay(new Date(dateStr + 'T00:00:00'))
     return (dow === 0 || dow === 6) ? ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00'] : ['16:00〜18:00']
   }
-  if (isVacationDay(dateStr, config)) return [...VACATION_TIME_SLOTS]
-  const { type } = getDayType(dateStr, config)
-  if (type === 'weekday' || type === 'schoolEvent') return ['16:00〜18:00']
-  return [...WEEKEND_TIME_SLOTS]
+  return getDayGridTimeSlots(dateStr, config)
 }
 
 interface Props {
@@ -54,15 +51,10 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
 
   const dateLabel = format(parseISO(date), 'M月d日（EEE）', { locale: ja })
 
-  const dayType = config ? getDayType(date, config).type : null
   const dow = getDay(new Date(date + 'T00:00:00'))
-  const isVacation = config ? isVacationDay(date, config) : false
-  const isWeekday = dayType
-    ? (dayType === 'weekday' || dayType === 'schoolEvent')
-    : (dow !== 0 && dow !== 6)
-  const availableTimeSlots = isVacation
-    ? [...VACATION_TIME_SLOTS]
-    : isWeekday ? ['16:00〜18:00'] : [...WEEKEND_TIME_SLOTS]
+  const availableTimeSlots = config
+    ? getDayGridTimeSlots(date, config)
+    : (dow !== 0 && dow !== 6) ? ['16:00〜18:00'] : ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00']
 
   const scheduleEntries = reservations.filter((r) => r.entryType === 'schedule')
   const deletedSlotEntries = reservations.filter((r) => r.entryType === 'deleted_slot')

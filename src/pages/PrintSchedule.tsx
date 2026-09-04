@@ -5,7 +5,7 @@ import { ja } from 'date-fns/locale'
 import { useAppStore } from '../store'
 import { useConfig } from '../hooks/useReservations'
 import { gasApi } from '../lib/gasApi'
-import { getDayType, getDaySchedule, isVacationDay, VACATION_TIME_SLOTS, WEEKEND_TIME_SLOTS } from '../lib/scheduleLogic'
+import { getDayType, getDaySchedule, getDayGridTimeSlots } from '../lib/scheduleLogic'
 import { getClubColor } from '../lib/clubColors'
 import { getConfirmedOccupancies, findOccupancy } from '../lib/occupancy'
 import type { Reservation } from '../types'
@@ -31,7 +31,8 @@ const FACILITY_SHORT: Record<string, string> = {
 }
 
 function getDayTypeLabel(type: string, scheduleType?: string): string {
-  if (type === 'schoolEvent') return scheduleType === 'rotation' ? '学校行事（休日）' : '学校行事（平日）'
+  // weekday扱い以外の行事（rotation/summerSat/summerSun/winterSat/winterSun/summerVac/winterVac）は休日扱い
+  if (type === 'schoolEvent') return (!scheduleType || scheduleType === 'weekday') ? '学校行事（平日）' : '学校行事（休日）'
   const MAP: Record<string, string> = {
     weekday: '平日', saturday: '土曜', sunday: '日曜',
     holiday: '祝日', longBreak: '長期休業',
@@ -95,12 +96,7 @@ export function PrintSchedule() {
       const { type, eventName, scheduleType } = getDayType(dateStr, config)
       const dow = format(day, 'EEE', { locale: ja })
       const dateLabel = format(day, 'M/d')
-      const isWeekday = type === 'weekday' || (type === 'schoolEvent' && scheduleType !== 'rotation')
-      const timeSlots = isVacationDay(dateStr, config)
-        ? [...VACATION_TIME_SLOTS]
-        : isWeekday
-          ? ['16:00〜18:00']
-          : [...WEEKEND_TIME_SLOTS]
+      const timeSlots = getDayGridTimeSlots(dateStr, config)
 
       const baseSlots = getDaySchedule(dateStr, config, printMonth)
       const dayRes = reservations.filter((r: Reservation) => r.date === dateStr)
