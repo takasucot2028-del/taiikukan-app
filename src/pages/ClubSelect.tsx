@@ -7,7 +7,7 @@ import { getClubColor } from '../lib/clubColors'
 
 const GAS_URL = import.meta.env.VITE_GAS_URL as string | undefined
 
-const VOLLEYBALL_SUBS = ['男子バレー', '女子バレー部', '男女バレーボール']
+const VOLLEYBALL_SUBS = ['男子バレー', '女子バレー部']
 
 export function ClubSelect() {
   const navigate = useNavigate()

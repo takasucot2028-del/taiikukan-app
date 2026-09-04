@@ -5,7 +5,6 @@ const CLUB_COLORS: Record<string, { bg: string; text: string }> = {
   'REDWOLVES男子':   { bg: 'bg-red-100',    text: 'text-red-800'    },
   'REDWOLVES女子':   { bg: 'bg-orange-100', text: 'text-orange-800' },
   '男子バレー':       { bg: 'bg-indigo-100', text: 'text-indigo-800' },
-  '男女バレーボール': { bg: 'bg-purple-100', text: 'text-purple-800' },
   'ソフトテニス':     { bg: 'bg-lime-100',   text: 'text-lime-800'   },
   '剣道':            { bg: 'bg-amber-100',  text: 'text-amber-800'  },
   'NexusBC':         { bg: 'bg-cyan-100',   text: 'text-cyan-800'   },
