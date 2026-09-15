@@ -951,3 +951,12 @@ function debugGetReservations() {
   Logger.log('confirmed_month(確定): ' + counts.confirmed_month);
   Logger.log('削除済み(除外): '        + counts.deleted);
 }
+
+// ==========================================
+// keepWarm: 起動の遅さを減らすため、時間主導型トリガーで定期実行する
+// トリガー設定：時間主導型 / 分ベースのタイマー / 5分おき / デプロイは Head
+// ==========================================
+function keepWarm() {
+  // スプレッドシートを軽く読み、実行環境とスプレッドシートの機能を起動した状態にしておく
+  SS.getSheetByName('設定').getRange('A1').getValue();
+}
