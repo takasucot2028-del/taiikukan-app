@@ -24,6 +24,10 @@ interface AppState {
 
   syncError: string | null
   setSyncError: (msg: string | null) => void
+
+  /** 通信に失敗したため前回データで表示中のキャッシュキー → そのデータを取得した時刻 */
+  staleSince: Record<string, number>
+  setStaleSince: (key: string, timestamp: number | null) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -50,6 +54,16 @@ export const useAppStore = create<AppState>()(
 
       syncError: null,
       setSyncError: (msg) => set({ syncError: msg }),
+
+      staleSince: {},
+      setStaleSince: (key, timestamp) => set((s) => {
+        // 変化がなければ同じ state を返して再描画を起こさない
+        if (timestamp === null ? !(key in s.staleSince) : s.staleSince[key] === timestamp) return s
+        const next = { ...s.staleSince }
+        if (timestamp === null) delete next[key]
+        else next[key] = timestamp
+        return { staleSince: next }
+      }),
     }),
     {
       name: 'taiikukan-app-storage',

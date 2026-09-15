@@ -12,7 +12,7 @@ const VOLLEYBALL_SUBS = ['男子バレー', '女子バレー部']
 export function ClubSelect() {
   const navigate = useNavigate()
   const { setSelectedClub } = useAppStore()
-  const { config, error, loading } = useConfig()
+  const { config, error, errorDetail, loading, refetch } = useConfig()
   const [search, setSearch] = useState('')
   const [volleyOpen, setVolleyOpen] = useState(false)
 
@@ -27,20 +27,28 @@ export function ClubSelect() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
-        <div className="bg-red-50 border border-red-300 rounded-xl p-5 max-w-lg w-full">
-          <h2 className="text-red-700 font-bold text-lg mb-2">データ取得エラー</h2>
-          <p className="text-red-600 text-sm mb-3">{error}</p>
-          <p className="text-gray-600 text-xs mb-3">
-            GAS WebアプリURL:<br />
-            <code className="break-all bg-gray-100 px-1 rounded text-xs">{GAS_URL ?? '未設定'}</code>
-          </p>
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 py-6">
+        <div className="bg-white border border-red-200 rounded-xl p-5 max-w-lg w-full shadow-sm">
+          <h2 className="text-red-700 font-bold text-lg mb-2">データを取得できませんでした</h2>
+          <p className="text-gray-700 text-sm mb-3">{error}</p>
+          <ul className="text-gray-600 text-xs space-y-1 mb-4 list-disc pl-4">
+            <li>少し待ってから「再試行」を押してください</li>
+            <li>Wi-Fiとモバイルデータを切り替えてお試しください</li>
+            <li>LINEなどのアプリ内で開いている場合は、SafariやChromeで開き直してください</li>
+          </ul>
           <button
-            onClick={() => window.location.reload()}
-            className="mt-4 w-full bg-blue-600 text-white rounded-lg py-2 text-sm"
+            onClick={() => refetch()}
+            className="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium"
           >
-            再読み込み
+            再試行
           </button>
+          <details className="mt-4 text-xs text-gray-500">
+            <summary className="cursor-pointer">技術情報（管理者向け）</summary>
+            <p className="mt-2 break-all">{errorDetail ?? '詳細なし'}</p>
+            <p className="mt-1 break-all">
+              GAS: <code className="bg-gray-100 px-1 rounded">{GAS_URL ?? '未設定'}</code>
+            </p>
+          </details>
         </div>
       </div>
     )

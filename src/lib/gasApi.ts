@@ -1,5 +1,6 @@
 import type { AppConfig, Rotation, DayPattern, Reservation } from '../types'
-import { getCached, setCache, clearCache, clearReservationCaches, CACHE_TTL } from './cache'
+import { getCached, getStale, setCache, clearCache, clearReservationCaches, CACHE_TTL } from './cache'
+import { useAppStore } from '../store'
 
 // 旧GAS形式（summerPatterns/winterPatterns）と新形式（patterns）の両方を受け付ける
 type RawRotation = {
@@ -47,49 +48,172 @@ function normalizeConfig(raw: Record<string, unknown>): AppConfig {
 
 const GAS_URL = import.meta.env.VITE_GAS_URL ?? 'YOUR_GAS_WEBAPP_URL'
 
-async function gasGet<T>(action: string, params: Record<string, string> = {}): Promise<T> {
-  const url = new URL(GAS_URL)
-  url.searchParams.set('action', action)
-  url.searchParams.set('_t', Date.now().toString())  // GASキャッシュ無効化
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-  const res = await fetch(url.toString(), { method: 'GET', redirect: 'follow' })
-  const text = await res.text()
-  if (text.trimStart().startsWith('<')) throw new Error('GASがHTMLを返しました（デプロイ設定を確認してください）')
-  return JSON.parse(text) as T
+// ==========================================
+// 通信処理
+// GASウェブアプリは「GASで実行 → script.googleusercontent.com で結果を受け取る」の2段階で、
+// 後段が断続的にGoogleのHTMLエラーページ（404）を返すことがあるため、取得系は自動で再試行する。
+// ==========================================
+
+/** 取得（GET）1回あたりの待ち時間。これを超えたら打ち切って再試行する */
+const GET_TIMEOUT_MS = 20_000
+/** 保存（POST）の待ち時間。GASの実行が遅いときに保存済みなのに失敗扱いにしないよう長めにする */
+const POST_TIMEOUT_MS = 60_000
+const GET_MAX_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 1_500
+
+type GasErrorKind = 'timeout' | 'network' | 'html' | 'http' | 'parse' | 'server'
+
+const GAS_ERROR_MESSAGE: Record<GasErrorKind, string> = {
+  timeout: '通信に時間がかかりすぎたため、データを取得できませんでした。',
+  network: 'インターネットに接続できませんでした。電波の状況を確認してください。',
+  html:    'サーバーが混み合っているため、データを取得できませんでした。',
+  http:    'サーバーが混み合っているため、データを取得できませんでした。',
+  parse:   'サーバーから正しいデータを受け取れませんでした。',
+  server:  'サーバーで一時的なエラーが発生したため、データを取得できませんでした。',
 }
 
+/** GAS通信エラー。message は利用者向けの文言、detail は原因調査用の情報 */
+export class GasError extends Error {
+  readonly kind: GasErrorKind
+  readonly detail: string
+
+  constructor(kind: GasErrorKind, detail: string) {
+    super(GAS_ERROR_MESSAGE[kind])
+    this.name = 'GasError'
+    this.kind = kind
+    this.detail = detail
+  }
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** 管理画面かどうか。管理画面では古いデータを元に保存すると最新の変更を上書きするため、予備データを使わない */
+const isAdminPage = () => window.location.hash.includes('/admin')
+
+async function requestJson<T>(url: string, init: RequestInit, timeoutMs: number): Promise<T> {
+  // AbortSignal.timeout は古いiOS Safariで使えないため AbortController で実装する
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const toTransportError = (e: unknown) =>
+    controller.signal.aborted
+      ? new GasError('timeout', `${timeoutMs / 1000}秒以内に応答なし`)
+      : new GasError('network', e instanceof Error ? e.message : String(e))
+
+  try {
+    const res = await fetch(url, { ...init, redirect: 'follow', signal: controller.signal })
+      .catch((e: unknown) => { throw toTransportError(e) })
+    const text = await res.text().catch((e: unknown) => { throw toTransportError(e) })
+
+    // 結果の受け取りに失敗するとGoogleのHTMLエラーページ（「ページが見つかりません」など）が返る
+    if (text.trimStart().startsWith('<')) {
+      const title = text.match(/<title>([^<]*)<\/title>/)?.[1] ?? ''
+      throw new GasError('html', `HTTP ${res.status} ${title}`.trim())
+    }
+    if (!res.ok) throw new GasError('http', `HTTP ${res.status}`)
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      throw new GasError('parse', text.slice(0, 100))
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** 取得系。失敗時は間隔を空けて再試行する（毎回新しい受け取りURLが発行されるため成功しやすい） */
+async function gasGet<T>(
+  action: string,
+  params: Record<string, string> = {},
+  /** 応答の形が正しければ null、不正なら理由を返す。不正な応答はキャッシュさせず再試行する */
+  validate?: (data: unknown) => string | null,
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= GET_MAX_ATTEMPTS; attempt++) {
+    const url = new URL(GAS_URL)
+    url.searchParams.set('action', action)
+    url.searchParams.set('_t', `${Date.now()}_${attempt}`)  // GASキャッシュ無効化
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+    try {
+      const data = await requestJson<unknown>(url.toString(), { method: 'GET' }, GET_TIMEOUT_MS)
+      // doGet は内部エラーを { error } としてHTTP 200で返すため、ここで失敗として扱う
+      if (data !== null && typeof data === 'object' && !Array.isArray(data) && 'error' in data) {
+        throw new GasError('server', String((data as { error: unknown }).error))
+      }
+      const invalid = validate?.(data) ?? null
+      if (invalid) throw new GasError('parse', invalid)
+      return data as T
+    } catch (e) {
+      lastError = e
+      console.warn(
+        `[gasApi] ${action} 取得失敗 (${attempt}/${GET_MAX_ATTEMPTS})`,
+        e instanceof GasError ? `${e.kind}: ${e.detail}` : e,
+      )
+      // オフラインなら再試行しても無駄なので打ち切る
+      if (attempt === GET_MAX_ATTEMPTS || !navigator.onLine) break
+      await sleep(RETRY_BASE_DELAY_MS * attempt)
+    }
+  }
+  throw lastError
+}
+
+/** 保存系。再試行しない：受け取りに失敗してもGAS側では実行済みのことがあり、再送すると二重登録になるため */
 async function gasPost<T>(action: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action, ...body }),
-  })
-  const text = await res.text()
-  if (text.trimStart().startsWith('<')) throw new Error('GASがHTMLを返しました（デプロイ設定を確認してください）')
-  return JSON.parse(text) as T
+  return requestJson<T>(
+    GAS_URL,
+    { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action, ...body }) },
+    POST_TIMEOUT_MS,
+  )
+}
+
+/** 最新データの取得に成功した／予備データで表示している、を画面に伝える */
+function markFresh(key: string) {
+  useAppStore.getState().setStaleSince(key, null)
+}
+
+function markStale(key: string, timestamp: number) {
+  useAppStore.getState().setStaleSince(key, timestamp)
+}
+
+/** 取得に失敗したとき、管理画面以外なら最後に取得できたデータを返す。無ければ元のエラーを投げる */
+function fallbackToStale<T>(key: string, error: unknown): T {
+  const stale = isAdminPage() ? null : getStale<T>(key)
+  if (!stale) throw error
+  console.warn(`[gasApi] ${key} 取得失敗のため前回データで表示:`, new Date(stale.timestamp).toLocaleString())
+  markStale(key, stale.timestamp)
+  return stale.data
 }
 
 export const gasApi = {
   getConfig: async () => {
-    const isAdmin = window.location.hash.includes('/admin')
-    if (!isAdmin) {
+    if (!isAdminPage()) {
       const cached = getCached<AppConfig>('config', CACHE_TTL.config)
       if (cached) { console.log('[cache] config hit'); return cached }
     }
-    const raw = await gasGet<Record<string, unknown>>('getConfig')
-    const data = normalizeConfig(raw)
-    setCache('config', data)
-    return data
+    try {
+      const raw = await gasGet<Record<string, unknown>>('getConfig', {}, (d) =>
+        d !== null && typeof d === 'object' && Array.isArray((d as { clubs?: unknown }).clubs) ? null : '設定データの形式が不正（clubs がない）')
+      const data = normalizeConfig(raw)
+      setCache('config', data)
+      markFresh('config')
+      return data
+    } catch (e) {
+      return fallbackToStale<AppConfig>('config', e)
+    }
   },
 
   getReservations: async (year: number, month: number) => {
     const key = `reservations_${year}_${month}`
     const cached = getCached<Reservation[]>(key, CACHE_TTL.reservations)
     if (cached) { console.log('[cache] reservations hit', year, month); return cached }
-    const data = await gasGet<Reservation[]>('getReservations', { year: String(year), month: String(month) })
-    setCache(key, data)
-    return data
+    try {
+      const data = await gasGet<Reservation[]>('getReservations', { year: String(year), month: String(month) },
+        (d) => Array.isArray(d) ? null : '予約データの形式が不正（配列でない）')
+      setCache(key, data)
+      markFresh(key)
+      return data
+    } catch (e) {
+      return fallbackToStale<Reservation[]>(key, e)
+    }
   },
 
   /** 占有予約申請（type: reservation） */

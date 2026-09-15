@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { format } from 'date-fns'
 import { useAppStore } from '../store'
 import { useReservations, useConfig } from '../hooks/useReservations'
 import { MonthCalendar } from '../components/Calendar/MonthCalendar'
@@ -51,12 +52,13 @@ function PushPrompt({ clubName, onClose }: { clubName: string; onClose: () => vo
 
 export function Home() {
   const navigate = useNavigate()
-  const { selectedClub, setSelectedClub, currentYear, currentMonth, setCurrentMonth } = useAppStore()
-  const { config, error: configError, loading: configLoading } = useConfig()
-  const { reservations, refetch } = useReservations()
+  const { selectedClub, setSelectedClub, currentYear, currentMonth, setCurrentMonth, staleSince } = useAppStore()
+  const { config, error: configError, loading: configLoading, refetch: refetchConfig } = useConfig()
+  const { reservations, refetch, error: reservationsError } = useReservations()
   const [tab, setTab] = useState<Tab>('calendar')
   const [filterMine, setFilterMine] = useState(false)
   const [showPushPrompt, setShowPushPrompt] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   // クラブ未選択チェック（ブラウザが #/home を直接復元した場合に対応）
   useEffect(() => {
@@ -118,6 +120,32 @@ export function Home() {
 
   const filterClub = filterMine ? selectedClub : ''
 
+  // 表示中の月に関係するデータのうち、通信失敗で前回データを使っているものの最古の取得時刻
+  const staleTimes = ['config', `reservations_${currentYear}_${currentMonth}`]
+    .map((key) => staleSince[key])
+    .filter((t): t is number => typeof t === 'number')
+  const oldestStale = staleTimes.length > 0 ? Math.min(...staleTimes) : null
+  const loadError = configError ?? reservationsError
+
+  const handleRetry = async () => {
+    setRetrying(true)
+    try {
+      await Promise.all([refetchConfig(), refetch()])
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  const retryButton = (
+    <button
+      onClick={handleRetry}
+      disabled={retrying}
+      className="shrink-0 text-xs bg-white border border-current rounded px-3 py-1.5 font-medium disabled:opacity-50"
+    >
+      {retrying ? '再接続中...' : '再試行'}
+    </button>
+  )
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {showPushPrompt && (
@@ -159,11 +187,21 @@ export function Home() {
         </div>
       )}
 
-      {/* GASエラー表示 */}
-      {configError && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-2">
-          <p className="text-red-700 text-xs font-medium">⚠️ 設定データ取得エラー（F12のConsoleで詳細確認）</p>
-          <p className="text-red-600 text-xs mt-0.5 break-all">{configError}</p>
+      {/* 通信エラー／前回データ表示中の案内 */}
+      {loadError ? (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center gap-3 text-red-700">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium">⚠️ {loadError}</p>
+            <p className="text-xs text-red-600 mt-0.5">電波の良い場所で「再試行」を押してください。</p>
+          </div>
+          {retryButton}
+        </div>
+      ) : oldestStale !== null && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-3 text-amber-800">
+          <p className="flex-1 min-w-0 text-xs">
+            通信が不安定なため、{format(new Date(oldestStale), 'M/d HH:mm')} 時点のデータを表示しています。
+          </p>
+          {retryButton}
         </div>
       )}
       {configLoading && (

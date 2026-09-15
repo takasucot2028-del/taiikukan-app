@@ -1,10 +1,11 @@
 import { useEffect, useCallback, useState } from 'react'
-import { gasApi } from '../lib/gasApi'
+import { gasApi, GasError } from '../lib/gasApi'
 import { useAppStore } from '../store'
 import { clearCache, clearReservationCaches } from '../lib/cache'
 
 export function useReservations() {
   const { currentYear, currentMonth, setReservations, reservations } = useAppStore()
+  const [error, setError] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -18,8 +19,10 @@ export function useReservations() {
         status: r.status,
       })))
       setReservations(data)
+      setError(null)
     } catch (e) {
       console.error('[useReservations] 予約データ取得エラー', e)
+      setError(e instanceof Error ? e.message : String(e))
     }
   }, [currentYear, currentMonth, setReservations])
 
@@ -32,17 +35,19 @@ export function useReservations() {
     fetchData()
   }, [fetchData])
 
-  return { reservations, refetch }
+  return { reservations, refetch, error }
 }
 
 export function useConfig() {
   const { config, setConfig } = useAppStore()
   const [error, setError] = useState<string | null>(null)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const fetchFromGas = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setErrorDetail(null)
     try {
       const data = await gasApi.getConfig()
       console.log('[useConfig] GASレスポンス:', JSON.stringify(data).slice(0, 500))
@@ -57,8 +62,9 @@ export function useConfig() {
       console.log('[useConfig] クラブ数:', data.clubs.length, '/ 祝日数:', data.holidays.length, '/ 行事数:', data.schoolEvents.length)
       setConfig(data)
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(`GAS接続エラー: ${msg}`)
+      // 利用者向けの文言を表示し、原因調査用の情報は errorDetail に分けて保持する
+      setError(e instanceof Error ? e.message : String(e))
+      setErrorDetail(e instanceof GasError ? `${e.kind}: ${e.detail}` : null)
       console.error('[useConfig] エラー:', e)
     } finally {
       setLoading(false)
@@ -75,5 +81,5 @@ export function useConfig() {
     await fetchFromGas()
   }, [fetchFromGas])
 
-  return { config, error, loading, refetch }
+  return { config, error, errorDetail, loading, refetch }
 }
