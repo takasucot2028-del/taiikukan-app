@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { gasApi } from '../../lib/gasApi'
+import { gasApi, describeSaveError } from '../../lib/gasApi'
+import { addPendingSubmission, hasPendingSubmission } from '../../lib/pendingSubmissions'
 import { useAppStore } from '../../store'
 import { RESERVATION_TIME_SLOTS as TIME_SLOTS, RESERVATION_FACILITY_GROUPS as FACILITY_GROUPS } from '../../lib/reservationOptions'
 import { isAfterDeadline, formatDeadline } from '../../lib/deadline'
@@ -33,13 +34,28 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
       setError(`この枠は既に「${blocking.clubName}」の占有予約（${blocking.facility} / ${blocking.timeSlot}）が確定しています。事務局にご相談ください。`)
       return
     }
+    // 同じ日時・施設の自クラブの申請が既にある（または送信済みで反映確認中）なら、二重申請にならないよう確認する
+    const slot = { clubName: selectedClub, date, timeSlot, facility }
+    const alreadyApplied = allReservations.some((r) =>
+      r.entryType === 'reservation' && r.status !== '却下' &&
+      r.clubName === slot.clubName && r.date === slot.date && r.timeSlot === slot.timeSlot && r.facility === slot.facility)
+    if ((alreadyApplied || hasPendingSubmission(slot)) &&
+      !window.confirm('同じ日時・施設の申請をすでに送信しています。もう一度送信すると二重申請になります。送信しますか？')) {
+      return
+    }
+
     setSubmitting(true)
     setError('')
     try {
-      await gasApi.addReservation({ clubName: selectedClub, date, timeSlot, facility, content, comment })
+      const result = await gasApi.addReservation({ clubName: selectedClub, date, timeSlot, facility, content, comment })
+      if (result.unconfirmed) {
+        // GASでは受け付け済みだが結果を受け取れなかった。一覧に出るまで端末に記録して二重申請を防ぐ
+        addPendingSubmission({ ...slot, content })
+        useAppStore.getState().setSyncNotice('申請を受け付けました。通信が不安定なため、「自分の予約」への反映に時間がかかる場合があります。二重に申請しないでください。')
+      }
       onSuccess()
-    } catch {
-      setError('送信に失敗しました。もう一度お試しください。')
+    } catch (e) {
+      setError(describeSaveError(e, '申請'))
     } finally {
       setSubmitting(false)
     }

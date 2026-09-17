@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { gasApi } from '../../lib/gasApi'
+import { gasApi, describeSaveError } from '../../lib/gasApi'
+import { useAppStore } from '../../store'
 import { RESERVATION_TIME_SLOTS, RESERVATION_FACILITY_GROUPS } from '../../lib/reservationOptions'
 import { isAfterDeadline, formatDeadline } from '../../lib/deadline'
 import type { Club, Facility, Reservation, ReservationStatus, TimeSlot } from '../../types'
@@ -39,14 +40,28 @@ export function AdminReservationForm({ clubs, entry, defaultDate, onSaved, onCan
       if (isEdit && entry) {
         await gasApi.updateReservation(entry.id, { date, timeSlot, facility, content, comment, status })
       } else {
-        const { id } = await gasApi.addReservation({ clubName, date, timeSlot, facility, content, comment })
-        // GAS の addReservation は occupancy を必ず「申請中」で作るため、別ステータス指定時は追従更新する
-        if (status !== '申請中') await gasApi.updateStatus(id, status)
+        const result = await gasApi.addReservation({ clubName, date, timeSlot, facility, content, comment })
+        const { setSyncNotice } = useAppStore.getState()
+        if (result.unconfirmed) {
+          // GASでは登録済みだが正式IDを受け取れず、ステータスを変更できない
+          setSyncNotice(status === '申請中'
+            ? '登録しました。通信が不安定なため、一覧への反映に時間がかかる場合があります。'
+            : `登録しましたが、通信が不安定なためステータスを「${status}」にできませんでした。一覧を再読み込みし、この申請のステータスを変更してください。二重に登録しないでください。`)
+        } else if (status !== '申請中') {
+          // GAS の addReservation は occupancy を必ず「申請中」で作るため、別ステータス指定時は追従更新する。
+          // 登録自体は成功しているので、ここでの失敗を「追加失敗」と表示して二重登録させない
+          try {
+            await gasApi.updateStatus(result.id, status)
+          } catch (e) {
+            console.error('[AdminReservationForm] ステータス更新エラー:', e)
+            setSyncNotice(`登録しましたが、ステータスを「${status}」にできませんでした。一覧を再読み込みし、この申請のステータスを変更してください。`)
+          }
+        }
       }
       onSaved()
     } catch (err) {
       console.error('[AdminReservationForm] 保存エラー:', err)
-      setError(isEdit ? '更新に失敗しました。' : '追加に失敗しました。')
+      setError(describeSaveError(err, isEdit ? '更新' : '追加'))
     } finally {
       setSaving(false)
     }

@@ -4,7 +4,8 @@ import { format, parseISO } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useAppStore } from '../store'
 import { useReservations } from '../hooks/useReservations'
-import { gasApi } from '../lib/gasApi'
+import { gasApi, describeSaveError } from '../lib/gasApi'
+import { getPendingSubmissions } from '../lib/pendingSubmissions'
 import { Modal } from '../components/common/Modal'
 import { ReservationForm } from '../components/Reservation/ReservationForm'
 import type { Reservation } from '../types'
@@ -24,6 +25,9 @@ export function MyReservations() {
 
   const mine = reservations.filter((r) => r.clubName === selectedClub)
   const sorted = [...mine].sort((a, b) => b.date.localeCompare(a.date))
+  // 送信は受け付け済みだが、まだ一覧で確認できていない申請（取得データに現れたら記録から外れる）
+  const pending = getPendingSubmissions(selectedClub).filter((p) => !mine.some((r) =>
+    r.entryType === 'reservation' && r.date === p.date && r.timeSlot === p.timeSlot && r.facility === p.facility && r.content === p.content))
 
   const handleCancel = async () => {
     if (!cancelTarget) return
@@ -35,9 +39,9 @@ export function MyReservations() {
     setBgSyncing(true)
     try {
       await gasApi.cancelReservation(target.id)
-    } catch {
+    } catch (e) {
       setReservations(prev)
-      setSyncError('取り消しに失敗しました。')
+      setSyncError(describeSaveError(e, '取り消し'))
     } finally {
       setBgSyncing(false)
     }
@@ -54,9 +58,27 @@ export function MyReservations() {
       </header>
 
       <main className="flex-1 p-3 max-w-lg mx-auto w-full space-y-3">
-        {sorted.length === 0 && (
+        {sorted.length === 0 && pending.length === 0 && (
           <p className="text-center text-gray-400 py-12">申請した予約はありません</p>
         )}
+
+        {pending.map((p) => (
+          <div key={`pending-${p.submittedAt}`} className="bg-white border border-dashed border-blue-300 rounded-lg p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <span className="font-semibold text-gray-800">
+                {format(parseISO(p.date), 'yyyy年M月d日（EEE）', { locale: ja })}
+              </span>
+              <span className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-800">
+                送信済み（反映確認中）
+              </span>
+            </div>
+            <p className="text-sm text-gray-700 mb-0.5">{p.facility} | {p.timeSlot}</p>
+            <p className="text-sm text-gray-600 mb-2">{p.content}</p>
+            <p className="text-xs text-gray-500">
+              通信が不安定なため、一覧への反映をまだ確認できていません。二重に申請しないでください。
+            </p>
+          </div>
+        ))}
 
         {sorted.map((r) => (
           <div key={r.id} className="bg-white border rounded-lg p-4 shadow-sm">

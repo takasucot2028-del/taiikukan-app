@@ -3,6 +3,9 @@ import { useAppStore } from '../../store'
 import { gasApi } from '../../lib/gasApi'
 import { AdminNav } from '../../components/admin/AdminNav'
 
+/** 通知はGASで送信済みだが結果を受け取れなかったとき。送り直すと全端末に二重に届くため再送させない */
+const UNCONFIRMED_SEND_MESSAGE = '送信処理は完了しましたが、通信が不安定なため送信件数を確認できませんでした。二重に届くのを避けるため、再送信しないでください。'
+
 interface PushStats {
   registeredCount: number
   history: { timestamp: string; title: string; sent: number }[]
@@ -30,7 +33,7 @@ export function AdminNotifications() {
         `体育館予約 ${currentMonth}月予定表確定`,
         `${currentMonth}月の体育館使用予定表が確定しました`
       )
-      showMsg(`送信しました（${res.sent}端末）`)
+      showMsg(res.unconfirmed ? UNCONFIRMED_SEND_MESSAGE : `送信しました（${res.sent}端末）`)
       const s = await gasApi.getPushStats()
       setStats(s)
     } catch {
@@ -48,7 +51,7 @@ export function AdminNotifications() {
         '体育館予約 締め切り通知',
         `翌月分の占有予約申請の締め切りは今月10日です`
       )
-      showMsg(`送信しました（${res.sent}端末）`)
+      showMsg(res.unconfirmed ? UNCONFIRMED_SEND_MESSAGE : `送信しました（${res.sent}端末）`)
     } catch {
       showMsg('送信に失敗しました')
     } finally {

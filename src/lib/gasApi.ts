@@ -50,9 +50,13 @@ const GAS_URL = import.meta.env.VITE_GAS_URL ?? 'YOUR_GAS_WEBAPP_URL'
 
 // ==========================================
 // 通信処理
-// GASウェブアプリは「GASで実行 → script.googleusercontent.com で結果を受け取る」の2段階で、
-// 後段が断続的にGoogleのHTMLエラーページ（404）を返すことがあるため、取得系は自動で再試行する。
+// GASウェブアプリは「GASで処理 → 処理完了後に script.googleusercontent.com へ転送して結果を返す」の2段階で、
+// 後段が断続的にGoogleのHTMLエラーページ（404）を返すことがある。
+// 取得系は自動で再試行し、保存系は「処理済みだが結果を受け取れなかった」を区別して扱う。
 // ==========================================
+
+/** GASが処理を完了した後に結果を受け取る転送先 */
+const RESULT_HOST = 'script.googleusercontent.com'
 
 /** 取得（GET）1回あたりの待ち時間。これを超えたら打ち切って再試行する */
 const GET_TIMEOUT_MS = 20_000
@@ -76,16 +80,35 @@ const GAS_ERROR_MESSAGE: Record<GasErrorKind, string> = {
 export class GasError extends Error {
   readonly kind: GasErrorKind
   readonly detail: string
+  /** 結果の受け取り先まで転送されていた＝GASでの処理は完了している（結果だけ受け取れなかった） */
+  readonly executed: boolean
 
-  constructor(kind: GasErrorKind, detail: string) {
+  constructor(kind: GasErrorKind, detail: string, executed = false) {
     super(GAS_ERROR_MESSAGE[kind])
     this.name = 'GasError'
     this.kind = kind
     this.detail = detail
+    this.executed = executed
   }
 }
 
+/** 保存系の結果。GASで処理済みだが結果を受け取れなかった場合は { unconfirmed: true } になる */
+export type PostResult<T> = (T & { unconfirmed?: never }) | { unconfirmed: true }
+
+/** 保存系のエラーを利用者向けの文言にする。
+ *  届いたかどうか分からない場合は、二重登録を防ぐため確認してから送り直すよう案内する */
+export function describeSaveError(e: unknown, action: string): string {
+  if (e instanceof GasError && (e.kind === 'timeout' || e.kind === 'network')) {
+    return `${action}できたか確認できませんでした。二重登録を防ぐため、少し待ってから画面を再読み込みし、反映されていないことを確認してからもう一度お試しください。`
+  }
+  return `${action}できませんでした。少し待ってからもう一度お試しください。`
+}
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+const hostOf = (url: string) => {
+  try { return new URL(url).host } catch { return '' }
+}
 
 /** 管理画面かどうか。管理画面では古いデータを元に保存すると最新の変更を上書きするため、予備データを使わない */
 const isAdminPage = () => window.location.hash.includes('/admin')
@@ -94,26 +117,28 @@ async function requestJson<T>(url: string, init: RequestInit, timeoutMs: number)
   // AbortSignal.timeout は古いiOS Safariで使えないため AbortController で実装する
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
-  const toTransportError = (e: unknown) =>
+  const transportError = (e: unknown, executed: boolean) =>
     controller.signal.aborted
-      ? new GasError('timeout', `${timeoutMs / 1000}秒以内に応答なし`)
-      : new GasError('network', e instanceof Error ? e.message : String(e))
+      ? new GasError('timeout', `${timeoutMs / 1000}秒以内に応答なし`, executed)
+      : new GasError('network', e instanceof Error ? e.message : String(e), executed)
 
   try {
     const res = await fetch(url, { ...init, redirect: 'follow', signal: controller.signal })
-      .catch((e: unknown) => { throw toTransportError(e) })
-    const text = await res.text().catch((e: unknown) => { throw toTransportError(e) })
+      .catch((e: unknown) => { throw transportError(e, false) })
+    // GASは処理を完了してから結果の受け取り先へ転送するため、そこまで届いていれば処理は完了している
+    const executed = res.redirected && hostOf(res.url) === RESULT_HOST
+    const text = await res.text().catch((e: unknown) => { throw transportError(e, executed) })
 
     // 結果の受け取りに失敗するとGoogleのHTMLエラーページ（「ページが見つかりません」など）が返る
     if (text.trimStart().startsWith('<')) {
       const title = text.match(/<title>([^<]*)<\/title>/)?.[1] ?? ''
-      throw new GasError('html', `HTTP ${res.status} ${title}`.trim())
+      throw new GasError('html', `HTTP ${res.status} ${title}`.trim(), executed)
     }
-    if (!res.ok) throw new GasError('http', `HTTP ${res.status}`)
+    if (!res.ok) throw new GasError('http', `HTTP ${res.status}`, executed)
     try {
       return JSON.parse(text) as T
     } catch {
-      throw new GasError('parse', text.slice(0, 100))
+      throw new GasError('parse', text.slice(0, 100), executed)
     }
   } finally {
     clearTimeout(timer)
@@ -156,13 +181,22 @@ async function gasGet<T>(
   throw lastError
 }
 
-/** 保存系。再試行しない：受け取りに失敗してもGAS側では実行済みのことがあり、再送すると二重登録になるため */
-async function gasPost<T>(action: string, body: Record<string, unknown>): Promise<T> {
-  return requestJson<T>(
-    GAS_URL,
-    { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action, ...body }) },
-    POST_TIMEOUT_MS,
-  )
+/** 保存系。再試行しない：GAS側では処理済みのことがあり、再送すると二重登録になるため。
+ *  GASでの処理完了が分かっていて結果だけ受け取れなかった場合は、失敗ではなく { unconfirmed: true } を返す */
+async function gasPost<T>(action: string, body: Record<string, unknown>): Promise<PostResult<T>> {
+  try {
+    return await requestJson<T & { unconfirmed?: never }>(
+      GAS_URL,
+      { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action, ...body }) },
+      POST_TIMEOUT_MS,
+    )
+  } catch (e) {
+    if (e instanceof GasError && e.executed) {
+      console.warn(`[gasApi] ${action}: GASでの処理は完了したが、結果を受け取れなかった`, `${e.kind}: ${e.detail}`)
+      return { unconfirmed: true }
+    }
+    throw e
+  }
 }
 
 /** 最新データの取得に成功した／予備データで表示している、を画面に伝える */
@@ -303,7 +337,7 @@ export const gasApi = {
   saveConfig: async (config: AppConfig & { satStartIndex?: number; sunStartIndex?: number }) => {
     const result = await gasPost<{ success: boolean; error?: string }>('saveConfig', { config })
     console.log('[gasApi] saveConfig GASレスポンス:', result)
-    if (!result.success) {
+    if (!result.unconfirmed && !result.success) {
       throw new Error(result.error ?? 'GAS saveConfig が失敗しました')
     }
     clearCache('config')

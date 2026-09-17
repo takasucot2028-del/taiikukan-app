@@ -8,10 +8,14 @@ import type { Reservation, SlotEntry, AppConfig } from '../../types'
 import { getDayGridTimeSlots } from '../../lib/scheduleLogic'
 import { timeSlotsOverlap, facilitiesOverlap, findOccupancy } from '../../lib/occupancy'
 import { getClubColor } from '../../lib/clubColors'
-import { gasApi } from '../../lib/gasApi'
+import { gasApi, describeSaveError } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
 
 const SLOT_ORDER = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:00', '8:00〜10:30', '10:30〜13:00', '13:00〜15:30', '16:00〜18:00', '終日']
+
+/** 登録直後で正式IDをまだ受け取れていない仮エントリか。GAS側にそのIDは無いため操作できない */
+const isTempId = (id: string) => id.startsWith('temp_')
+const TEMP_ENTRY_NOTICE = '登録内容の反映を確認中です。少し待ってから画面を再読み込みして操作してください。'
 
 function sortSlots(slots: string[]): string[] {
   return [...slots].sort((a, b) => {
@@ -42,7 +46,7 @@ interface Props {
 }
 
 export function DayDetailModal({ date, reservations, schedule, config, onClose, onReservationAdded }: Props) {
-  const { selectedClub, reservations: allReservations, setReservations, setBgSyncing, setSyncError } = useAppStore()
+  const { selectedClub, reservations: allReservations, setReservations, setBgSyncing, setSyncError, setSyncNotice } = useAppStore()
   const [showReservationForm, setShowReservationForm] = useState(false)
   const [showScheduleForm, setShowScheduleForm] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Reservation | null>(null)
@@ -68,6 +72,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
 
   // 楽観的削除：スケジュールエントリをストアから即座に除去
   const handleDeleteSchedule = async (entry: Reservation) => {
+    if (isTempId(entry.id)) { setSyncNotice(TEMP_ENTRY_NOTICE); return }
     if (!window.confirm(`「${entry.content}」を削除しますか？`)) return
     setBusy(true)
     const prev = allReservations
@@ -76,9 +81,9 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
     try {
       await gasApi.deleteScheduleEntry(entry.id)
       onReservationAdded()
-    } catch {
+    } catch (e) {
       setReservations(prev)
-      setSyncError('削除に失敗しました。')
+      setSyncError(describeSaveError(e, '削除'))
     } finally {
       setBusy(false)
       setBgSyncing(false)
@@ -87,6 +92,7 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
 
   // 楽観的削除：deleted_slot を除去（スロットを元に戻す）
   const handleRestoreSlot = async (entry: Reservation) => {
+    if (isTempId(entry.id)) { setSyncNotice(TEMP_ENTRY_NOTICE); return }
     setBusy(true)
     const prev = allReservations
     setReservations(allReservations.filter(r => r.id !== entry.id))
@@ -94,9 +100,9 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
     try {
       await gasApi.restoreSlot(entry.id)
       onReservationAdded()
-    } catch {
+    } catch (e) {
       setReservations(prev)
-      setSyncError('元に戻せませんでした。')
+      setSyncError(describeSaveError(e, '元に戻す操作が'))
     } finally {
       setBusy(false)
       setBgSyncing(false)
@@ -127,13 +133,18 @@ export function DayDetailModal({ date, reservations, schedule, config, onClose, 
     setBgSyncing(true)
     try {
       const result = await gasApi.deleteSlot({ clubName, date, timeSlot: slot, facility, deletedBy: selectedClub })
-      // 仮IDを正式IDに置換
-      const cur = useAppStore.getState().reservations
-      useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+      if (result.unconfirmed) {
+        // GASでは登録済みだが正式IDを受け取れなかった。仮エントリのまま表示し、再取得で正式なデータに置き換わる
+        setSyncNotice('空き枠にしました。通信が不安定なため、反映の確認に時間がかかる場合があります。')
+      } else {
+        // 仮IDを正式IDに置換
+        const cur = useAppStore.getState().reservations
+        useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+      }
       onReservationAdded()
-    } catch {
+    } catch (e) {
       setReservations(prev)
-      setSyncError('削除に失敗しました。')
+      setSyncError(describeSaveError(e, '空き枠に'))
     } finally {
       setBusy(false)
       setBgSyncing(false)

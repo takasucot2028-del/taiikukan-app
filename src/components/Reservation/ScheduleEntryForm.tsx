@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { gasApi } from '../../lib/gasApi'
+import { gasApi, describeSaveError } from '../../lib/gasApi'
 import { useAppStore } from '../../store'
 import { getConfirmedOccupancies, findOccupancy } from '../../lib/occupancy'
 import type { Reservation } from '../../types'
@@ -44,6 +44,12 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
     }
     setError('')
 
+    // 登録直後で正式IDをまだ受け取れていない仮エントリは、GAS側にそのIDが無いため編集できない
+    if (entry?.id.startsWith('temp_')) {
+      setError('登録内容の反映を確認中です。少し待ってから画面を再読み込みして編集してください。')
+      return
+    }
+
     if (entry) {
       // 編集：楽観的更新してすぐにフォームを閉じる
       const prev = allReservations
@@ -55,9 +61,9 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
       try {
         await gasApi.updateReservation(entry.id, { timeSlot: timeSlot as Reservation['timeSlot'], facility, content })
         onSaved?.()
-      } catch {
+      } catch (e) {
         setReservations(prev)
-        setSyncError('更新に失敗しました。')
+        setSyncError(describeSaveError(e, '更新'))
       } finally {
         setBgSyncing(false)
       }
@@ -83,14 +89,19 @@ export function ScheduleEntryForm({ date, entry, availableTimeSlots, lockedSlot,
       setBgSyncing(true)
       try {
         const result = await gasApi.addScheduleEntry({ clubName: selectedClub, date, timeSlot, facility, content })
-        // 仮IDを正式IDに置換（アンマウント後もストアから直接操作）
-        const cur = useAppStore.getState().reservations
-        useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+        if (result.unconfirmed) {
+          // GASでは登録済みだが正式IDを受け取れなかった。仮エントリのまま表示し、再取得で正式なデータに置き換わる
+          useAppStore.getState().setSyncNotice('予定を追加しました。通信が不安定なため、反映の確認に時間がかかる場合があります。')
+        } else {
+          // 仮IDを正式IDに置換（アンマウント後もストアから直接操作）
+          const cur = useAppStore.getState().reservations
+          useAppStore.getState().setReservations(cur.map(r => r.id === tempId ? { ...r, id: result.id } : r))
+        }
         onSaved?.()
-      } catch {
+      } catch (e) {
         const cur = useAppStore.getState().reservations
         useAppStore.getState().setReservations(cur.filter(r => r.id !== tempId))
-        setSyncError('追加に失敗しました。')
+        setSyncError(describeSaveError(e, '追加'))
       } finally {
         setBgSyncing(false)
       }

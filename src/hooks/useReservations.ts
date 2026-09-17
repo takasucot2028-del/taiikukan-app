@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { gasApi, GasError } from '../lib/gasApi'
 import { useAppStore } from '../store'
 import { clearCache, clearReservationCaches } from '../lib/cache'
+import { reconcilePendingSubmissions } from '../lib/pendingSubmissions'
 
 export function useReservations() {
   const { currentYear, currentMonth, setReservations, reservations } = useAppStore()
@@ -18,7 +19,15 @@ export function useReservations() {
         club: r.clubName,
         status: r.status,
       })))
-      setReservations(data)
+      reconcilePendingSubmissions(data)
+      // 登録直後の仮エントリ（正式IDをまだ受け取れていないもの）は、取得データに同じ内容がなければ残す。
+      // 通信失敗で前回データを表示したときに、登録した内容が画面から消えないようにするため
+      const monthPrefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+      const temps = useAppStore.getState().reservations.filter((r) =>
+        r.id.startsWith('temp_') && r.date.startsWith(monthPrefix) &&
+        !data.some((d) => d.entryType === r.entryType && d.clubName === r.clubName &&
+          d.date === r.date && d.timeSlot === r.timeSlot && d.facility === r.facility))
+      setReservations([...data, ...temps])
       setError(null)
     } catch (e) {
       console.error('[useReservations] 予約データ取得エラー', e)

@@ -25,6 +25,10 @@ interface AppState {
   syncError: string | null
   setSyncError: (msg: string | null) => void
 
+  /** 失敗ではないが利用者に伝えたいお知らせ（送信は受け付けたが結果を確認できなかった等） */
+  syncNotice: string | null
+  setSyncNotice: (msg: string | null) => void
+
   /** 通信に失敗したため前回データで表示中のキャッシュキー → そのデータを取得した時刻 */
   staleSince: Record<string, number>
   setStaleSince: (key: string, timestamp: number | null) => void
@@ -54,6 +58,9 @@ export const useAppStore = create<AppState>()(
 
       syncError: null,
       setSyncError: (msg) => set({ syncError: msg }),
+
+      syncNotice: null,
+      setSyncNotice: (msg) => set({ syncNotice: msg }),
 
       staleSince: {},
       setStaleSince: (key, timestamp) => set((s) => {
