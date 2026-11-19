@@ -182,26 +182,34 @@ export const WEEKEND_TIME_SLOTS = ['8:00〜11:00', '11:00〜14:00', '14:00〜17:
 export const VACATION_TIME_SLOTS = ['8:00〜10:30', '10:30〜13:00', '13:00〜15:30']
 
 /** 夏季・冬季休暇ローテーションの時間帯を新しい値に変換する
- *  （夏季土曜・日曜・冬季土曜・日曜は従来通り維持） */
+ *  （休暇中でも土曜・日曜は従来の3時間枠のまま維持） */
 const VAC_TIME_SLOT_MAP: Record<string, string> = {
   '8:00〜11:00': '8:00〜10:30',
   '11:00〜14:00': '10:30〜13:00',
   '14:00〜17:00': '13:00〜15:30',
 }
-function applyVacTimeSlots(slots: SlotEntry[]): SlotEntry[] {
+
+/** 休暇ローテーションの2時間30分枠を使う曜日かどうか。
+ *  休暇期間中であっても土曜・日曜は従来の3時間枠（8:00〜11:00ほか）とする */
+function usesVacationTimeSlots(dateStr: string): boolean {
+  const dow = getDay(new Date(dateStr + 'T00:00:00'))
+  return dow !== 0 && dow !== 6
+}
+
+function applyVacTimeSlots(dateStr: string, slots: SlotEntry[]): SlotEntry[] {
+  if (!usesVacationTimeSlots(dateStr)) return slots
   return slots.map((s) => ({ ...s, timeSlot: VAC_TIME_SLOT_MAP[s.timeSlot] ?? s.timeSlot }))
 }
 
-/** その日が夏季・冬季休暇ローテーション日かどうか
- *  （getDaySchedule で applyVacTimeSlots を適用する日と一致させる） */
+/** その日が休暇ローテーションの2時間30分枠を使う日かどうか
+ *  （getDaySchedule で applyVacTimeSlots が実際に変換する日と一致させる） */
 export function isVacationDay(dateStr: string, config: AppConfig): boolean {
+  if (!usesVacationTimeSlots(dateStr)) return false
   const { type, scheduleType } = getDayType(dateStr, config)
   if (type !== 'schoolEvent') return false
   if (scheduleType === 'summerVac' || scheduleType === 'winterVac') return true
-  // 後方互換: rotation は日曜以外を休暇扱い
-  if (scheduleType === 'rotation') {
-    return getDay(new Date(dateStr + 'T00:00:00')) !== 0
-  }
+  // 後方互換: rotation は平日のみ休暇扱い（土日は上で除外済み）
+  if (scheduleType === 'rotation') return true
   return false
 }
 
@@ -304,7 +312,7 @@ export function getDaySchedule(
         const rotation = config.summerVacationRotation
         if (!rotation) return []
         const nth = getNthSummerVacInMonth(dateStr, config)
-        return applyVacTimeSlots(applyRotation(rotation, nth, '夏季休暇ローテーション', dateStr))
+        return applyVacTimeSlots(dateStr, applyRotation(rotation, nth, '夏季休暇ローテーション', dateStr))
       }
       case 'winterSat': {
         const rotation = config.winterSaturdayRotation
@@ -327,7 +335,7 @@ export function getDaySchedule(
         const rotation = config.winterVacationRotation
         if (!rotation) return []
         const nth = getNthWinterVacInMonth(dateStr, config)
-        return applyVacTimeSlots(applyRotation(rotation, nth, '冬季休暇ローテーション', dateStr))
+        return applyVacTimeSlots(dateStr, applyRotation(rotation, nth, '冬季休暇ローテーション', dateStr))
       }
       case 'rotation':
       default: {
@@ -347,7 +355,7 @@ export function getDaySchedule(
         const rotation = summer ? config.summerVacationRotation : config.winterVacationRotation
         if (!rotation) { console.warn(`[getDaySchedule] ${summer ? 'summerVacationRotation' : 'winterVacationRotation'} is null for ${dateStr}`); return [] }
         const nth = getNthVacInMonth(dateStr, config)
-        return applyVacTimeSlots(applyRotation(rotation, nth, summer ? '夏季休暇ローテーション' : '冬季休暇ローテーション', dateStr))
+        return applyVacTimeSlots(dateStr, applyRotation(rotation, nth, summer ? '夏季休暇ローテーション' : '冬季休暇ローテーション', dateStr))
       }
     }
   }
