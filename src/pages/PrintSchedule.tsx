@@ -5,7 +5,7 @@ import { ja } from 'date-fns/locale'
 import { useAppStore } from '../store'
 import { useConfig } from '../hooks/useReservations'
 import { gasApi } from '../lib/gasApi'
-import { getDayType, getDaySchedule, getDayGridTimeSlots } from '../lib/scheduleLogic'
+import { getDayType, getDaySchedule, getScheduleRowTimeSlots } from '../lib/scheduleLogic'
 import { getClubColor } from '../lib/clubColors'
 import { getConfirmedOccupancies, findOccupancy } from '../lib/occupancy'
 import type { Reservation } from '../types'
@@ -18,6 +18,7 @@ const FACILITIES = [
   '第2体育館（全面）',
   '総合体育館 半面A',
   '総合体育館 半面B',
+  '総合体育館（全面）',
 ]
 
 const FACILITY_SHORT: Record<string, string> = {
@@ -28,6 +29,7 @@ const FACILITY_SHORT: Record<string, string> = {
   '第2体育館（全面）':  '第2\n全面',
   '総合体育館 半面A':   '総合\n半面A',
   '総合体育館 半面B':   '総合\n半面B',
+  '総合体育館（全面）': '総合\n全面',
 }
 
 function getDayTypeLabel(type: string, scheduleType?: string): string {
@@ -96,10 +98,10 @@ export function PrintSchedule() {
       const { type, eventName, scheduleType } = getDayType(dateStr, config)
       const dow = format(day, 'EEE', { locale: ja })
       const dateLabel = format(day, 'M/d')
-      const timeSlots = getDayGridTimeSlots(dateStr, config)
-
       const baseSlots = getDaySchedule(dateStr, config, printMonth)
       const dayRes = reservations.filter((r: Reservation) => r.date === dateStr)
+      // 表示グリッドの時間帯に加え、実際に予定が入っている時間帯も行にする
+      const timeSlots = getScheduleRowTimeSlots(dateStr, config, baseSlots, dayRes)
       const deletedSlots = dayRes.filter((r: Reservation) => r.entryType === 'deleted_slot')
       const userSchedule = dayRes.filter((r: Reservation) => r.entryType === 'schedule')
       const occupancies = getConfirmedOccupancies(dateStr, dayRes)

@@ -226,6 +226,46 @@ export function getDayGridTimeSlots(dateStr: string, config: AppConfig): string[
   return [...WEEKEND_TIME_SLOTS]
 }
 
+/** 時間帯の表示順（既知のものを定義順、未知のものは末尾） */
+const TIME_SLOT_ORDER = [
+  '8:00〜11:00', '11:00〜14:00', '14:00〜17:00',
+  '8:00〜10:30', '10:30〜13:00', '13:00〜15:30',
+  '16:00〜18:00', '終日',
+]
+
+export function sortTimeSlots(slots: string[]): string[] {
+  return [...slots].sort((a, b) => {
+    const ia = TIME_SLOT_ORDER.indexOf(a)
+    const ib = TIME_SLOT_ORDER.indexOf(b)
+    if (ia === -1 && ib === -1) return a.localeCompare(b)
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+}
+
+/** 予定表（Excel出力・印刷予定表）で行にする時間帯。
+ *  表示グリッドの時間帯だけでなく、実際に割当や指導者追加が入っている時間帯も必ず行にする。
+ *  グリッドに無い時間帯の予定が黙って消えるのを防ぐため（カレンダーの詳細モーダルと同じ考え方）。
+ *  「終日」は施設列ではなく占有欄で表すので行にしない。 */
+export function getScheduleRowTimeSlots(
+  dateStr: string,
+  config: AppConfig,
+  schedule: SlotEntry[],
+  dayReservations: Reservation[],
+): string[] {
+  const extra = dayReservations
+    .filter((r) => r.entryType === 'schedule' || r.entryType === 'deleted_slot')
+    .map((r) => r.timeSlot)
+  const all = new Set<string>([
+    ...getDayGridTimeSlots(dateStr, config),
+    ...schedule.map((s) => s.timeSlot),
+    ...extra,
+  ])
+  all.delete('終日')
+  return sortTimeSlots([...all])
+}
+
 /** NexusBC固定ルール：日曜14:00〜17:00の第1・第2体育館（全面）はNexusBC固定。
  *  施設名は表記ゆれ（「第1体育館 全面」/「第1体育館（全面）」）があるため正規化して判定する。 */
 const NEXUS_BC_FACILITIES = ['第1体育館（全面）', '第2体育館（全面）']

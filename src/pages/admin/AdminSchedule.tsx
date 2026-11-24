@@ -3,7 +3,7 @@ import { eachDayOfInterval, startOfMonth, endOfMonth, format, getDay } from 'dat
 import { useAppStore } from '../../store'
 import { useReservations, useConfig } from '../../hooks/useReservations'
 import { gasApi } from '../../lib/gasApi'
-import { getDayType, getDaySchedule, getDayGridTimeSlots } from '../../lib/scheduleLogic'
+import { getDayType, getDaySchedule, getScheduleRowTimeSlots } from '../../lib/scheduleLogic'
 import { getConfirmedOccupancies, findOccupancy, timeSlotsOverlap } from '../../lib/occupancy'
 import { AdminNav } from '../../components/admin/AdminNav'
 import type { Reservation } from '../../types'
@@ -36,10 +36,15 @@ function getClubForSlot(
   // 確定占有は該当施設・時間帯を上書きする（全面占有は半面も、終日は全時間帯も対象）
   const occ = findOccupancy(timeSlot, facility, getConfirmedOccupancies(dateStr, dayRes))
   if (occ) return `【占有】${occ.clubName}`
-  const deleted = dayRes.find((r) => r.entryType === 'deleted_slot' && r.timeSlot === timeSlot && r.facility === facility)
-  if (deleted) return ''
+  // 指導者追加（schedule）を空き枠化（deleted_slot）より先に見る。
+  // deleted_slot はローテーションの固定枠を空けるだけの印なので、
+  // 空いた枠を別のクラブが使う場合は両方が同じセルに並ぶ。
+  // 先に deleted_slot を見ると、後から入った予定がカレンダー・印刷予定表には出るのに
+  // Excelだけ空欄になる（画面と食い違う）。
   const userEntry = dayRes.find((r) => r.entryType === 'schedule' && r.timeSlot === timeSlot && r.facility === facility)
   if (userEntry) return `${userEntry.clubName}（${userEntry.content}）`
+  const deleted = dayRes.find((r) => r.entryType === 'deleted_slot' && r.timeSlot === timeSlot && r.facility === facility)
+  if (deleted) return ''
   const fixed = schedule.find((s) => s.timeSlot === timeSlot && s.facility === facility)
   return fixed?.clubName ?? ''
 }
@@ -97,6 +102,10 @@ export function AdminSchedule() {
     setExporting(true)
     try {
       const XLSX: XLSXModule = await import('xlsx-js-style')
+      // 予約データは出力する年月のものを明示的に取り直す。
+      // 画面の予約データは「データ更新」を押すまで前の年月のままになるため、
+      // 年月を切り替えただけでExcelを出すとローテーションと予約の月がずれる
+      const monthRes = await gasApi.getReservations(year, month)
       const days = eachDayOfInterval({ start: startOfMonth(new Date(year, month - 1)), end: endOfMonth(new Date(year, month - 1)) })
 
       const headers = ['月日', '曜日', '区分', '行事名', '占有内容', '時間帯',
@@ -121,16 +130,18 @@ export function AdminSchedule() {
         const eventName = dayType.eventName ?? ''
         const fill = fillForType[dayType.type] ?? ''
 
-        const slots = getDayGridTimeSlots(dateStr, config)
+        const dayRes = monthRes.filter((r) => r.date === dateStr)
+        // 表示グリッドの時間帯に加え、実際に予定が入っている時間帯も行にする
+        const slots = getScheduleRowTimeSlots(dateStr, config, schedule, dayRes)
 
         // occupancy reservations for this day（却下済みは予定表に出さない）
-        const occRes = reservations.filter(
-          (r) => r.date === dateStr && r.entryType === 'reservation' && r.status !== '却下'
+        const occRes = dayRes.filter(
+          (r) => r.entryType === 'reservation' && r.status !== '却下'
         )
 
         for (let si = 0; si < slots.length; si++) {
           const slot = slots[si]
-          const facilityValues = FACILITIES.map((f) => getClubForSlot(dateStr, slot, f, schedule, reservations))
+          const facilityValues = FACILITIES.map((f) => getClubForSlot(dateStr, slot, f, schedule, monthRes))
           const occForSlot = occRes.filter((r) => timeSlotsOverlap(r.timeSlot, slot))
           const occText = occForSlot.map((r) => `${r.clubName}：${r.content}`).join(' / ')
 
@@ -212,11 +223,12 @@ export function AdminSchedule() {
         <div className="bg-white border rounded-xl p-4">
           <h2 className="font-semibold text-gray-700 mb-3">対象年月</h2>
           <div className="flex gap-2 items-center">
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))}
+            {/* 年月を変えたら予約データの対象月も同時に切り替える（確定ステータスの表示ずれを防ぐ） */}
+            <select value={year} onChange={(e) => { const y = Number(e.target.value); setYear(y); setCurrentMonth(y, month) }}
               className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
               {[2025, 2026, 2027].map((y) => <option key={y} value={y}>{y}年</option>)}
             </select>
-            <select value={month} onChange={(e) => setMonth(Number(e.target.value))}
+            <select value={month} onChange={(e) => { const m = Number(e.target.value); setMonth(m); setCurrentMonth(year, m) }}
               className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{m}月</option>
