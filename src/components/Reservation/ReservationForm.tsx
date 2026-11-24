@@ -6,21 +6,24 @@ import { useAppStore } from '../../store'
 import { RESERVATION_TIME_SLOTS as TIME_SLOTS, RESERVATION_FACILITY_GROUPS as FACILITY_GROUPS } from '../../lib/reservationOptions'
 import { isAfterDeadline, formatDeadline } from '../../lib/deadline'
 import { getConfirmedOccupancies, findOccupancy } from '../../lib/occupancy'
-import type { TimeSlot, Facility } from '../../types'
+import type { TimeSlot, Facility, Reservation } from '../../types'
 
 interface Props {
   initialDate?: string
+  /** 指定時は編集モード（既存の申請を更新する）。未指定なら新規申請 */
+  entry?: Reservation | null
   onSuccess: () => void
   onCancel: () => void
 }
 
-export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
-  const { selectedClub, currentYear, currentMonth, reservations: allReservations } = useAppStore()
-  const [date, setDate] = useState(initialDate ?? format(new Date(currentYear, currentMonth - 1, 1), 'yyyy-MM-dd'))
-  const [timeSlot, setTimeSlot] = useState<TimeSlot>('8:00〜11:00')
-  const [facility, setFacility] = useState<Facility>('第1体育館（全面）')
-  const [content, setContent] = useState('')
-  const [comment, setComment] = useState('')
+export function ReservationForm({ initialDate, entry, onSuccess, onCancel }: Props) {
+  const isEdit = !!entry
+  const { selectedClub, currentYear, currentMonth, reservations: allReservations, setReservations } = useAppStore()
+  const [date, setDate] = useState(entry?.date ?? initialDate ?? format(new Date(currentYear, currentMonth - 1, 1), 'yyyy-MM-dd'))
+  const [timeSlot, setTimeSlot] = useState<TimeSlot>(entry?.timeSlot ?? '8:00〜11:00')
+  const [facility, setFacility] = useState<Facility>((entry?.facility as Facility) ?? '第1体育館（全面）')
+  const [content, setContent] = useState(entry?.content ?? '')
+  const [comment, setComment] = useState(entry?.comment ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -28,34 +31,54 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
     e.preventDefault()
     if (!content.trim()) { setError('占有内容を入力してください'); return }
 
-    // 既に確定済みの占有が入っている枠は二重に申請できない（全面占有は半面も対象）
+    // 登録直後で正式IDをまだ受け取れていない申請は、GAS側にそのIDが無いため更新できない
+    if (isEdit && entry!.id.startsWith('temp_')) {
+      setError('申請内容の反映を確認中です。少し待ってから画面を再読み込みして編集してください。')
+      return
+    }
+
+    // 既に確定済みの占有が入っている枠は二重に申請できない（全面占有は半面も対象）。
+    // 編集中の申請自身は除く
     const blocking = findOccupancy(timeSlot, facility, getConfirmedOccupancies(date, allReservations))
-    if (blocking) {
+    if (blocking && blocking.id !== entry?.id) {
       setError(`この枠は既に「${blocking.clubName}」の占有予約（${blocking.facility} / ${blocking.timeSlot}）が確定しています。事務局にご相談ください。`)
       return
     }
-    // 同じ日時・施設の自クラブの申請が既にある（または送信済みで反映確認中）なら、二重申請にならないよう確認する
+
     const slot = { clubName: selectedClub, date, timeSlot, facility }
-    const alreadyApplied = allReservations.some((r) =>
-      r.entryType === 'reservation' && r.status !== '却下' &&
-      r.clubName === slot.clubName && r.date === slot.date && r.timeSlot === slot.timeSlot && r.facility === slot.facility)
-    if ((alreadyApplied || hasPendingSubmission(slot)) &&
-      !window.confirm('同じ日時・施設の申請をすでに送信しています。もう一度送信すると二重申請になります。送信しますか？')) {
-      return
+    // 二重申請の確認は新規申請のときだけ。編集は申請を増やさないため不要
+    if (!isEdit) {
+      const alreadyApplied = allReservations.some((r) =>
+        r.entryType === 'reservation' && r.status !== '却下' &&
+        r.clubName === slot.clubName && r.date === slot.date && r.timeSlot === slot.timeSlot && r.facility === slot.facility)
+      if ((alreadyApplied || hasPendingSubmission(slot)) &&
+        !window.confirm('同じ日時・施設の申請をすでに送信しています。もう一度送信すると二重申請になります。送信しますか？')) {
+        return
+      }
     }
 
     setSubmitting(true)
     setError('')
     try {
-      const result = await gasApi.addReservation({ clubName: selectedClub, date, timeSlot, facility, content, comment })
-      if (result.unconfirmed) {
-        // GASでは受け付け済みだが結果を受け取れなかった。一覧に出るまで端末に記録して二重申請を防ぐ
-        addPendingSubmission({ ...slot, content })
-        useAppStore.getState().setSyncNotice('申請を受け付けました。通信が不安定なため、「自分の予約」への反映に時間がかかる場合があります。二重に申請しないでください。')
+      if (isEdit) {
+        const result = await gasApi.updateReservation(entry!.id, { date, timeSlot, facility, content, comment })
+        // 取得し直す前でも画面に反映させる（通信が不安定なときに変更が消えて見えないようにする）
+        setReservations(allReservations.map((r) =>
+          r.id === entry!.id ? { ...r, date, timeSlot, facility, content, comment } : r))
+        if (result.unconfirmed) {
+          useAppStore.getState().setSyncNotice('変更を受け付けました。通信が不安定なため、一覧への反映に時間がかかる場合があります。')
+        }
+      } else {
+        const result = await gasApi.addReservation({ clubName: selectedClub, date, timeSlot, facility, content, comment })
+        if (result.unconfirmed) {
+          // GASでは受け付け済みだが結果を受け取れなかった。一覧に出るまで端末に記録して二重申請を防ぐ
+          addPendingSubmission({ ...slot, content })
+          useAppStore.getState().setSyncNotice('申請を受け付けました。通信が不安定なため、「自分の予約」への反映に時間がかかる場合があります。二重に申請しないでください。')
+        }
       }
       onSuccess()
     } catch (e) {
-      setError(describeSaveError(e, '申請'))
+      setError(describeSaveError(e, isEdit ? '変更' : '申請'))
     } finally {
       setSubmitting(false)
     }
@@ -146,7 +169,7 @@ export function ReservationForm({ initialDate, onSuccess, onCancel }: Props) {
           disabled={submitting}
           className="flex-1 bg-blue-600 text-white rounded-lg py-3 font-medium disabled:opacity-50"
         >
-          {submitting ? '送信中...' : '申請する'}
+          {submitting ? '送信中...' : isEdit ? '変更する' : '申請する'}
         </button>
       </div>
     </form>

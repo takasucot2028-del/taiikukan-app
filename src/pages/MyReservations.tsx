@@ -121,7 +121,7 @@ export function MyReservations() {
       {editTarget && (
         <Modal title="予約を編集" onClose={() => setEditTarget(null)}>
           <ReservationForm
-            initialDate={editTarget.date}
+            entry={editTarget}
             onSuccess={() => { setEditTarget(null); refetch() }}
             onCancel={() => setEditTarget(null)}
           />
